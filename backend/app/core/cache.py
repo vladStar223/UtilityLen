@@ -10,7 +10,10 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
-import redis
+try:
+    import redis
+except ImportError:
+    redis = None
 
 from app.core.config import settings
 
@@ -18,18 +21,22 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TTL = 86400  # 24 hours, in seconds.
 
-_client: Optional[redis.Redis] = None
+_client: Optional[Any] = None
 _client_initialized = False
 
 #: In-memory fallback used when Redis is not available.
 _fallback: Dict[str, str] = {}
 
 
-def _redis_client() -> Optional[redis.Redis]:
+def _redis_client() -> Optional[Any]:
     global _client, _client_initialized
     if _client_initialized:
         return _client
     _client_initialized = True
+    if redis is None:
+        logger.debug("Redis package not installed; using in-memory fallback.")
+        _client = None
+        return _client
     try:
         _client = redis.Redis.from_url(
             settings.REDIS_URL,

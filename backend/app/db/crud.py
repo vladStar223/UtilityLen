@@ -10,7 +10,12 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import hash_password
 from app.core.logging import logger
-from app.core.models import BillDocument, ComparisonReport
+from app.core.models import (
+    BillDocument,
+    ComparisonReport,
+    MeterReading as CoreMeterReading,
+    ServiceLine,
+)
 from app.db.models import (
     Bill,
     BillService,
@@ -116,6 +121,88 @@ def save_bill(db: Session, bill_doc: BillDocument, user_id: Optional[str] = None
 def get_bill(db: Session, bill_id: str) -> Optional[Bill]:
     """Return a persisted receipt by ``bill_id`` (or ``None``)."""
     return db.query(Bill).filter(Bill.bill_id == bill_id).first()
+
+
+def find_previous_bill(
+    db: Session,
+    user_id: str,
+    address: str,
+    current_period: str,
+) -> Optional[Bill]:
+    """Find the most recent bill for a user preceding ``current_period``.
+
+    First attempts to find a bill with the exact matching ``address``.
+    If none is found, falls back to any bill for that user preceding ``current_period``.
+    Orders by ``period.desc()``, returns the first match or None.
+    """
+    base_query = (
+        db.query(Bill)
+        .filter(Bill.user_id == user_id)
+        .filter(Bill.period < current_period)
+    )
+
+    if address:
+        exact = (
+            base_query
+            .filter(Bill.address == address)
+            .order_by(Bill.period.desc(), Bill.created_at.desc())
+            .first()
+        )
+        if exact is not None:
+            return exact
+
+    return (
+        base_query
+        .order_by(Bill.period.desc(), Bill.created_at.desc())
+        .first()
+    )
+
+
+def bill_to_document(bill: Bill) -> BillDocument:
+    """Reconstruct a Pydantic ``BillDocument`` from a persisted ``Bill`` ORM model."""
+    services: List[ServiceLine] = []
+    for svc in bill.services:
+        services.append(
+            ServiceLine(
+                service_code=svc.service_code,
+                raw_name=svc.raw_name,
+                unit=svc.unit,
+                volume=float(svc.volume),
+                tariff=float(svc.tariff),
+                coefficient=float(svc.coefficient) if svc.coefficient is not None else 1.0,
+                recalculation=0.0,
+                penalty=0.0,
+                total=float(svc.total),
+            )
+        )
+
+    meters: List[CoreMeterReading] = []
+    for m in bill.meters:
+        meters.append(
+            CoreMeterReading(
+                meter_id=m.meter_id,
+                service_code=m.service_code,
+                current_reading=float(m.current_reading),
+                prev_reading=float(m.prev_reading) if m.prev_reading is not None else None,
+                verification_due_date=(
+                    m.verification_due_date.isoformat()
+                    if m.verification_due_date
+                    else None
+                ),
+            )
+        )
+
+    return BillDocument(
+        bill_id=bill.bill_id,
+        period=bill.period,
+        address=bill.address,
+        payer=bill.payer,
+        total_amount=float(bill.total_amount),
+        qr_data=bill.qr_data,
+        qr_sum_rub=float(bill.qr_sum_rub) if bill.qr_sum_rub is not None else None,
+        meters=meters,
+        services=services,
+    )
 
 
 def save_comparison(
@@ -273,7 +360,7 @@ def get_user_bills(db: Session, user_id: str) -> List[Bill]:
     return (
         db.query(Bill)
         .filter(Bill.user_id == user_id)
-        .order_by(Bill.created_at.desc())
+        .order_by(Bill.period.desc(), Bill.created_at.desc())
         .all()
     )
 
