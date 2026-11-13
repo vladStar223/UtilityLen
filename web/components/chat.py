@@ -86,9 +86,13 @@ def render_chat_view(client) -> None:
             st.write(prompt)
 
         # Stream assistant response
+        comp_id = "cmp_2026_11"
+        if st.session_state.get("analysis_result"):
+            comp_id = st.session_state["analysis_result"].get("comparison_id", comp_id)
+
         with st.chat_message("assistant"):
             full_response = st.write_stream(
-                client.chat_stream(comparison_id="cmp_2026_11", message=prompt)
+                client.chat_stream(comparison_id=comp_id, message=prompt)
             )
 
         st.session_state["chat_history"].append(
