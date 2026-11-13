@@ -1,8 +1,10 @@
 """API Client for interacting with the backend service."""
+from __future__ import annotations
+
 import os
 import json
 import logging
-from typing import Generator, Dict, Any, List
+from typing import Generator, Dict, Any, List, Optional
 from pathlib import Path
 
 import httpx
