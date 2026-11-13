@@ -79,6 +79,17 @@ flowchart LR
 
 ---
 
+## 🤖 Мультиагентная разработка (Contract-First + Directory Isolation)
+
+Разработка проекта ведется тремя параллельными агентами с жесткой фиксацией контрактов и зон ответственности:
+
+- 📑 [00_ORCHESTRATION_GUIDE.md](docs/agents/00_ORCHESTRATION_GUIDE.md) — регламент изоляции директорий, единый API-контракт и git worktree.
+- 🧮 [01_BACKEND_CORE_AGENT.md](docs/agents/01_BACKEND_CORE_AGENT.md) — ТЗ для Агента 1 (Pydantic-модели, нормализатор, факторный анализ, QR-парсер, FastAPI).
+- ⚖️ [02_AI_LAWYER_AGENT.md](docs/agents/02_AI_LAWYER_AGENT.md) — ТЗ для Агента 2 (AI-юрист, словарь терминов ЖКХ, база ПП РФ № 354, SSE-стриминг чата).
+- 🖥️ [03_FRONTEND_AGENT.md](docs/agents/03_FRONTEND_AGENT.md) — ТЗ для Агента 3 (Streamlit, Mock-режим, карточки KPI, график Plotly, интерактивный чат).
+
+---
+
 ## 🚀 Быстрый запуск (планируемый)
 
 ```bash
