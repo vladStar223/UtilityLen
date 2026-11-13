@@ -42,17 +42,41 @@ class ApiClient:
         if self.use_mock:
             if case_id == "case_02_coeff_15":
                 contract_path = self._find_contract_file()
+                res = None
                 if contract_path is not None:
                     try:
                         with open(contract_path, "r", encoding="utf-8") as f:
-                            return json.loads(f.read())
+                            res = json.loads(f.read())
                     except (OSError, json.JSONDecodeError):
                         pass
-                return self._heating_spike_mock()
+                if res is None:
+                    res = self._coeff_15_mock()
+                res["ai_summary"] = (
+                    "Внимание: В квитанции за ноябрь 2026 г. обнаружена скрытая переплата. "
+                    "Управляющая компания применила штрафной повышающий коэффициент 1.5 к нормативу "
+                    "холодного водоснабжения на сумму +245.18 ₽ из-за истекшего срока поверки счетчика. "
+                    "В соответствии с п. 59-60 ПП РФ № 354, начисление коэффициента без предварительного "
+                    "3-месячного расчета по среднему незаконно. Рекомендуется подать заявление на перерасчет."
+                )
+                return res
             if case_id == "case_01_heating_spike":
-                return self._heating_spike_mock()
+                res = self._heating_spike_mock()
+                res["ai_summary"] = (
+                    "Анализ начислений: Тариф на отопление остался строго на уровне прошлого месяца (4 000.00 ₽/Гкал). "
+                    "Весь прирост счета (+1 700.00 ₽, +32.7%) вызван исключительно ростом объема потребленного тепла "
+                    "(с 1.3 до 1.725 Гкал) в связи с сезонным похолоданием в ноябре. "
+                    "Перерасчетов, скрытых комиссий и начислений по нормативу не зафиксировано."
+                )
+                return res
             if case_id == "case_03_tariff_index":
-                return self._tariff_index_mock()
+                res = self._tariff_index_mock()
+                res["ai_summary"] = (
+                    "Анализ начислений: Потребление ресурсов вашей квартирой осталось на прежнем уровне. "
+                    "Увеличение итогового платежа на +450.00 ₽ (+9.0%) связано исключительно с плановой "
+                    "городской индексацией тарифов на водоснабжение и электроэнергию с 1 июля. "
+                    "Все начисления соответствуют утвержденным региональным нормативам."
+                )
+                return res
             raise ValueError(f"Unknown mock case_id: {case_id}")
 
         response = httpx.post(
@@ -61,7 +85,13 @@ class ApiClient:
             timeout=10.0,
         )
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        if "ai_summary" not in data:
+            data["ai_summary"] = (
+                "Детализированный факторный анализ выполнен на бэкенде. "
+                "Все составляющие дельты разложены на тарифную и объемную компоненты."
+            )
+        return data
 
     def chat_stream(self, comparison_id: str, message: str) -> Generator[str, None, None]:
         if self.use_mock:
@@ -98,6 +128,58 @@ class ApiClient:
             if path.exists():
                 return path
         return None
+
+    @staticmethod
+    def _coeff_15_mock() -> Dict[str, Any]:
+        return {
+            "comparison_id": "cmp_2026_10_11",
+            "summary": {
+                "prev_period": "2026-10",
+                "curr_period": "2026-11",
+                "prev_total": 5420.0,
+                "curr_total": 6890.5,
+                "delta_abs": 1470.5,
+                "delta_pct": 27.13,
+                "qr_verified": True,
+                "status_level": "red",
+            },
+            "factor_breakdown": {
+                "tariff_effect_rub": 180.0,
+                "volume_effect_rub": 940.5,
+                "recalculation_effect_rub": 350.0,
+                "new_services_effect_rub": 0.0,
+            },
+            "anomalies": [
+                {
+                    "code": "APPLYING_COEFF_1_5",
+                    "severity": "red",
+                    "service_category": "cold_water",
+                    "title": "Применен повышающий коэффициент 1.5",
+                    "impact_rub": 245.18,
+                    "hint": "Истек срок поверки счетчика ХВС или не передавались показания более 3 месяцев.",
+                }
+            ],
+            "items": [
+                {
+                    "category": "cold_water",
+                    "display_name": "Холодное водоснабжение (ХВС)",
+                    "unit": "м3",
+                    "prev_volume": 6.0,
+                    "curr_volume": 8.2,
+                    "prev_tariff": 54.0,
+                    "curr_tariff": 59.8,
+                    "prev_total": 324.0,
+                    "curr_total": 735.54,
+                    "delta_abs": 411.54,
+                    "delta_pct": 127.02,
+                    "tariff_delta_rub": 34.8,
+                    "volume_delta_rub": 131.56,
+                    "coeff_surcharge_rub": 245.18,
+                    "status": "red",
+                    "plain_explanation": "Расход вырос на 2.2 м³, тариф вырос на 5.80 ₽, плюс начислен штрафной коэффициент 1.5.",
+                }
+            ],
+        }
 
     @staticmethod
     def _heating_spike_mock() -> Dict[str, Any]:

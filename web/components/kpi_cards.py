@@ -11,12 +11,12 @@ def render_kpi_cards(summary: dict, factor_breakdown: dict):
     col1.metric(
         "Предыдущий период",
         f"{summary.get('prev_total', 0):,.2f} ₽",
-        summary.get("prev_period", ""),
+        summary.get("prev_period", "Базовый"),
     )
     col2.metric(
         "Текущий период",
         f"{summary.get('curr_total', 0):,.2f} ₽",
-        summary.get("curr_period", ""),
+        summary.get("curr_period", "К оплате"),
     )
 
     delta_abs = summary.get("delta_abs", 0)
