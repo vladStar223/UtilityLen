@@ -33,7 +33,11 @@ services:
       - PORT=8000
       - DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/utilitylens
       - REDIS_URL=redis://redis:6379/0
-      - API_KEY=${API_KEY:-}
+    env_file:
+      - path: ../backend/.env
+        required: false
+      - path: .env
+        required: false
     volumes:
       - ../contracts:/contracts:ro
       - ../data:/data:ro
@@ -50,11 +54,16 @@ services:
       context: ../web
       dockerfile: Dockerfile
     ports:
+      - "80:8501"
       - "8501:8501"
     environment:
       - USE_MOCK_API=false
       - API_BASE_URL=http://backend:8000
-      - API_KEY=${API_KEY:-}
+    env_file:
+      - path: ../web/.env
+        required: false
+      - path: .env
+        required: false
     depends_on:
       - backend
 

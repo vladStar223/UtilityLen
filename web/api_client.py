@@ -229,6 +229,8 @@ class ApiClient:
             parts.append(f"Главная аномалия: {title}.")
             parts.append(f"Сумма переплаты: {impact:.2f} ₽.")
             if hint:
+                if not hint.endswith((".", "!", "?")):
+                    hint += "."
                 parts.append(f"Рекомендация: {hint}")
         else:
             parts.append("Значимых аномалий не выявлено.")
