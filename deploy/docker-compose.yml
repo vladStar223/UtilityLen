@@ -4,7 +4,7 @@ services:
     environment:
       - POSTGRES_DB=utilitylens
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -31,8 +31,9 @@ services:
       - "8000:8000"
     environment:
       - PORT=8000
-      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/utilitylens
+      - DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/utilitylens
       - REDIS_URL=redis://redis:6379/0
+      - API_KEY=${API_KEY:-}
     volumes:
       - ../contracts:/contracts:ro
       - ../data:/data:ro
@@ -53,8 +54,19 @@ services:
     environment:
       - USE_MOCK_API=false
       - API_BASE_URL=http://backend:8000
+      - API_KEY=${API_KEY:-}
     depends_on:
       - backend
+
+  nginx:
+    image: nginx:1.25-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - web
 
 volumes:
   postgres_data:
