@@ -5,6 +5,7 @@ from typing import Generator, Dict, Any, List
 from pathlib import Path
 
 import httpx
+import streamlit as st
 
 USE_MOCK_API = os.getenv("USE_MOCK_API", "true").lower() in ("true", "1", "yes")
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
@@ -192,3 +193,9 @@ class ApiClient:
                 }
             ],
         }
+
+
+@st.cache_resource
+def get_api_client() -> ApiClient:
+    """Create (and cache) the API client instance."""
+    return ApiClient()

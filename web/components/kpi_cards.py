@@ -1,0 +1,39 @@
+"""KPI summary cards component."""
+import streamlit as st
+
+
+def render_kpi_cards(summary: dict, factor_breakdown: dict):
+    """Render the traffic-light KPI cards and QR verification badge."""
+    st.subheader("📊 Сводка начислений")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric(
+        "Предыдущий период",
+        f"{summary.get('prev_total', 0):,.2f} ₽",
+        summary.get("prev_period", ""),
+    )
+    col2.metric(
+        "Текущий период",
+        f"{summary.get('curr_total', 0):,.2f} ₽",
+        summary.get("curr_period", ""),
+    )
+
+    delta_abs = summary.get("delta_abs", 0)
+    delta_pct = summary.get("delta_pct", 0)
+    col3.metric(
+        "Разница к оплате",
+        f"{delta_abs:+,.2f} ₽",
+        f"{delta_pct:+.1f}%",
+        delta_color="inverse",
+    )
+
+    vol_eff = factor_breakdown.get("volume_effect_rub", 0)
+    tar_eff = factor_breakdown.get("tariff_effect_rub", 0)
+    driver = "Объем потребления" if vol_eff >= tar_eff else "Рост тарифа"
+    col4.metric("Главный драйвер роста", driver, f"+{max(vol_eff, tar_eff):,.2f} ₽")
+
+    if summary.get("qr_verified", False):
+        st.success("🛡 **Верифицировано по ГОСТ QR:** Начисления соответствуют банковскому платежному коду")
+    else:
+        st.warning("⚠️ **Внимание:** Обнаружено расхождение с суммой банковского QR-кода")
