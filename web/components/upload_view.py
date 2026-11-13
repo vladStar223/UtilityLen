@@ -32,12 +32,12 @@ def render_upload_view(client) -> None:
             )
 
             if uploaded_file is not None:
-                is_image = uploaded_file.type.startswith("image/")
+                is_image = (uploaded_file.type or "").startswith("image/")
                 if is_image:
                     st.image(
                         uploaded_file,
                         caption="Загруженный скан квитанции",
-                        use_column_width=True,
+                        use_container_width=True,
                     )
                 else:
                     st.caption(
