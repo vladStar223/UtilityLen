@@ -46,8 +46,11 @@ _ANOMALY_LAW_REF: Dict[str, str] = {
     "OPTIONAL_SERVICE_DETECTED": "ст. 16 ЗоЗПП РФ, ч. 2 ст. 154 ЖК РФ",
 }
 
+_LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("GPTUNNEL_API_KEY")
 _LLM_API_URL = os.getenv("LLM_API_URL")
-_LLM_API_KEY = os.getenv("LLM_API_KEY")
+if not _LLM_API_URL and os.getenv("GPTUNNEL_BASE_URL"):
+    _base = os.getenv("GPTUNNEL_BASE_URL", "").rstrip("/")
+    _LLM_API_URL = f"{_base}/chat/completions" if not _base.endswith("/chat/completions") else _base
 _LLM_TIMEOUT_S = float(os.getenv("LLM_TIMEOUT_S", "3.0"))
 
 _ADDRESS_RE = re.compile(r"г\.\s*[А-Яа-яЁё\-]+[^,]*(?:,\s*[^.]*)?", re.UNICODE)

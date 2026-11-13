@@ -1,0 +1,64 @@
+{
+  "bill_id": "bill_index_2026_06",
+  "period": "2026-06",
+  "address": "г. Владивосток, Океанский проспект, д. 20, кв. 5",
+  "payer": "Сидорова А.В. (обезличено)",
+  "total_amount": 5000.00,
+  "qr_data": "ST00012|Name=ПАО ДЭК|PersonalAcc=40702810888800002222|BankName=ПАО СБЕРБАНК|BIC=044525225|Sum=500000",
+  "qr_sum_rub": 5000.00,
+  "meters": [
+    {
+      "meter_id": "CW-3301",
+      "service_code": "cold_water",
+      "prev_reading": 80.0,
+      "current_reading": 90.0,
+      "verification_due_date": "2029-01-01"
+    }
+  ],
+  "services": [
+    {
+      "service_code": "cold_water",
+      "raw_name": "Холодное водоснабжение",
+      "unit": "м3",
+      "volume": 10.0,
+      "tariff": 45.00,
+      "coefficient": 1.0,
+      "recalculation": 0.0,
+      "penalty": 0.0,
+      "total": 450.00
+    },
+    {
+      "service_code": "hot_water",
+      "raw_name": "Горячее водоснабжение",
+      "unit": "м3",
+      "volume": 5.0,
+      "tariff": 220.00,
+      "coefficient": 1.0,
+      "recalculation": 0.0,
+      "penalty": 0.0,
+      "total": 1100.00
+    },
+    {
+      "service_code": "electricity",
+      "raw_name": "Электроснабжение",
+      "unit": "кВт·ч",
+      "volume": 200.0,
+      "tariff": 4.50,
+      "coefficient": 1.0,
+      "recalculation": 0.0,
+      "penalty": 0.0,
+      "total": 900.00
+    },
+    {
+      "service_code": "maintenance",
+      "raw_name": "Содержание жилого помещения",
+      "unit": "м2",
+      "volume": 51.0,
+      "tariff": 50.00,
+      "coefficient": 1.0,
+      "recalculation": 0.0,
+      "penalty": 0.0,
+      "total": 2550.00
+    }
+  ]
+}

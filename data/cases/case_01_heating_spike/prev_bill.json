@@ -1,0 +1,31 @@
+{
+  "bill_id": "bill_heat_2026_10",
+  "period": "2026-10",
+  "address": "г. Владивосток, ул. Светланская, д. 45, кв. 12",
+  "payer": "Петров П.П. (обезличено)",
+  "total_amount": 5200.00,
+  "qr_data": "ST00012|Name=АО ДГК|PersonalAcc=40702810999900001111|BankName=ПАО СБЕРБАНК|BIC=044525225|Sum=520000",
+  "qr_sum_rub": 5200.00,
+  "meters": [
+    {
+      "meter_id": "HEAT-104",
+      "service_code": "heating",
+      "prev_reading": 15.2,
+      "current_reading": 16.5,
+      "verification_due_date": "2028-10-01"
+    }
+  ],
+  "services": [
+    {
+      "service_code": "heating",
+      "raw_name": "Отопление",
+      "unit": "Гкал",
+      "volume": 1.3,
+      "tariff": 4000.00,
+      "coefficient": 1.0,
+      "recalculation": 0.0,
+      "penalty": 0.0,
+      "total": 5200.00
+    }
+  ]
+}

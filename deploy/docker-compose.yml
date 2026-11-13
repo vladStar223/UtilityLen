@@ -4,7 +4,7 @@ services:
     environment:
       - POSTGRES_DB=utilitylens
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -32,12 +32,12 @@ services:
       - "8000:8000"
     environment:
       - PORT=8000
-      - DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@db:5432/utilitylens
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - GPTUNNEL_API_KEY=${GPTUNNEL_API_KEY:-}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8501,http://localhost:3000,http://136.234.72.54,http://136.234.72.54:8000,http://25.vibe.fast.ru,http://25.vibe.fast.ru:8000}
+      - DATABASE_URL=postgresql+psycopg2://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/utilitylens
+      - REDIS_URL=redis://redis:6379/0
     env_file:
       - path: ../backend/.env
+        required: false
+      - path: .env
         required: false
     volumes:
       - ../contracts:/contracts:ro
@@ -50,7 +50,6 @@ services:
         condition: service_healthy
 
   web:
-    profiles: ["frontend", "full"]
     build:
       context: ../web
       dockerfile: Dockerfile
@@ -59,8 +58,23 @@ services:
     environment:
       - USE_MOCK_API=false
       - API_BASE_URL=http://backend:8000
+    env_file:
+      - path: ../web/.env
+        required: false
+      - path: .env
+        required: false
     depends_on:
       - backend
+
+  nginx:
+    image: nginx:1.25-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - web
 
 volumes:
   postgres_data:
