@@ -1,11 +1,16 @@
 """Trends view component — multi-line price dynamics chart."""
 import streamlit as st
 import plotly.graph_objects as go
-import pandas as pd
 
 
 def render_trends_view() -> None:
     """Render the full-screen price trends chart screen."""
+    is_dark = st.session_state.get("theme_dark", True)
+    text_color = "#f8fafc" if is_dark else "#0f172a"
+    text_muted = "#94a3b8" if is_dark else "#475569"
+    card_bg = "rgba(30, 41, 59, 0.85)" if is_dark else "rgba(255, 255, 255, 0.9)"
+    card_border = "#334155" if is_dark else "rgba(203, 213, 225, 0.9)"
+    grid_color = "rgba(255, 255, 255, 0.08)" if is_dark else "rgba(15, 23, 42, 0.08)"
 
     # --- Header ---
     col_title, col_badge, col_back = st.columns([4, 1.5, 1.5])
@@ -13,10 +18,10 @@ def render_trends_view() -> None:
         st.markdown("## 📈 Динамика изменения цен и тарифов")
     with col_badge:
         st.markdown(
-            "<div style='display:flex;align-items:center;height:100%;padding-top:12px;'>"
-            "<span style='background:#334155;color:#94a3b8;border-radius:12px;"
-            "padding:4px 14px;font-size:13px;font-weight:600;'>"
-            "Июнь — Ноябрь 2026</span></div>",
+            f"<div style='display:flex;align-items:center;height:100%;padding-top:12px;'>"
+            f"<span style='background:{card_bg};color:{text_muted};border:1px solid {card_border};"
+            f"border-radius:12px;padding:4px 14px;font-size:13px;font-weight:600;'>"
+            f"Июнь — Ноябрь 2026</span></div>",
             unsafe_allow_html=True,
         )
     with col_back:
@@ -32,19 +37,19 @@ def render_trends_view() -> None:
     data = {
         "🔥 Отопление": {
             "values": [800, 800, 800, 1200, 3640, 4223],
-            "color": "#fbbf24",
+            "color": "#f59e0b",
         },
         "💧 Холодная вода (ХВС)": {
             "values": [310, 310, 315, 320, 324, 735.54],
-            "color": "#38bdf8",
+            "color": "#0284c7" if not is_dark else "#38bdf8",
         },
         "♨️ Горячая вода (ГВС)": {
             "values": [950, 1035, 1035, 1040, 1040, 1094],
-            "color": "#fb7185",
+            "color": "#e11d48" if not is_dark else "#fb7185",
         },
         "⚡ Электричество": {
             "values": [1180, 1190, 1220, 1190, 1210, 1240],
-            "color": "#34d399",
+            "color": "#059669" if not is_dark else "#34d399",
         },
     }
 
@@ -76,7 +81,7 @@ def render_trends_view() -> None:
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, Open Sans, sans-serif", color="#e2e8f0"),
+        font=dict(family="Inter, Open Sans, sans-serif", color=text_color),
         hovermode="x unified",
         legend=dict(
             orientation="h",
@@ -84,20 +89,20 @@ def render_trends_view() -> None:
             y=1.02,
             xanchor="left",
             x=0,
-            font=dict(size=13),
+            font=dict(size=13, color=text_color),
         ),
         margin=dict(l=40, r=40, t=20, b=40),
         xaxis=dict(
-            gridcolor="rgba(255,255,255,0.08)",
-            linecolor="rgba(255,255,255,0.15)",
-            tickfont=dict(size=13),
+            gridcolor=grid_color,
+            linecolor=grid_color,
+            tickfont=dict(size=13, color=text_color),
         ),
         yaxis=dict(
-            gridcolor="rgba(255,255,255,0.08)",
-            linecolor="rgba(255,255,255,0.15)",
+            gridcolor=grid_color,
+            linecolor=grid_color,
             tickformat=",.0f",
             ticksuffix=" ₽",
-            tickfont=dict(size=13),
+            tickfont=dict(size=13, color=text_color),
         ),
     )
 
@@ -108,46 +113,46 @@ def render_trends_view() -> None:
     c1, c2, c3, c4 = st.columns(4)
 
     card_style = (
-        "background:#1e293b;border-radius:12px;padding:18px 16px;"
-        "border:1px solid #334155;height:100%;"
+        f"background:{card_bg};border-radius:16px;padding:18px 16px;"
+        f"border:1px solid {card_border};height:100%;box-shadow: 0 4px 12px rgba(0,0,0,0.05);"
     )
 
     with c1:
         st.markdown(
             f"<div style='{card_style}'>"
-            "<p style='color:#fbbf24;font-size:22px;margin:0;'>🔥 Отопление</p>"
-            "<p style='color:#f8fafc;font-size:28px;font-weight:700;margin:8px 0 4px;'>+38%</p>"
-            "<p style='color:#94a3b8;font-size:13px;margin:0;'>в ноябре (морозы)</p>"
-            "</div>",
+            f"<p style='color:#f59e0b;font-size:18px;font-weight:700;margin:0;'>🔥 Отопление</p>"
+            f"<p style='color:{text_color};font-size:26px;font-weight:800;margin:6px 0 2px;'>+38%</p>"
+            f"<p style='color:{text_muted};font-size:13px;margin:0;'>в ноябре (морозы)</p>"
+            f"</div>",
             unsafe_allow_html=True,
         )
 
     with c2:
         st.markdown(
             f"<div style='{card_style}'>"
-            "<p style='color:#38bdf8;font-size:22px;margin:0;'>💧 Холодная вода</p>"
-            "<p style='color:#f8fafc;font-size:28px;font-weight:700;margin:8px 0 4px;'>+127%</p>"
-            "<p style='color:#94a3b8;font-size:13px;margin:0;'>включен коэфф. 1.5!</p>"
-            "</div>",
+            f"<p style='color:#0284c7;font-size:18px;font-weight:700;margin:0;'>💧 Холодная вода</p>"
+            f"<p style='color:#e11d48;font-size:26px;font-weight:800;margin:6px 0 2px;'>+127%</p>"
+            f"<p style='color:{text_muted};font-size:13px;margin:0;'>включен коэфф. 1.5!</p>"
+            f"</div>",
             unsafe_allow_html=True,
         )
 
     with c3:
         st.markdown(
             f"<div style='{card_style}'>"
-            "<p style='color:#fb7185;font-size:22px;margin:0;'>♨️ Горячая вода</p>"
-            "<p style='color:#f8fafc;font-size:28px;font-weight:700;margin:8px 0 4px;'>+9%</p>"
-            "<p style='color:#94a3b8;font-size:13px;margin:0;'>плановая индексация с июля</p>"
-            "</div>",
+            f"<p style='color:#e11d48;font-size:18px;font-weight:700;margin:0;'>♨️ Горячая вода</p>"
+            f"<p style='color:{text_color};font-size:26px;font-weight:800;margin:6px 0 2px;'>+9%</p>"
+            f"<p style='color:{text_muted};font-size:13px;margin:0;'>индексация с июля</p>"
+            f"</div>",
             unsafe_allow_html=True,
         )
 
     with c4:
         st.markdown(
             f"<div style='{card_style}'>"
-            "<p style='color:#34d399;font-size:22px;margin:0;'>⚡ Электричество</p>"
-            "<p style='color:#f8fafc;font-size:28px;font-weight:700;margin:8px 0 4px;'>±3%</p>"
-            "<p style='color:#94a3b8;font-size:13px;margin:0;'>Стабильно (норматив в норме)</p>"
-            "</div>",
+            f"<p style='color:#059669;font-size:18px;font-weight:700;margin:0;'>⚡ Электричество</p>"
+            f"<p style='color:{text_color};font-size:26px;font-weight:800;margin:6px 0 2px;'>±3%</p>"
+            f"<p style='color:{text_muted};font-size:13px;margin:0;'>норматив стабилен</p>"
+            f"</div>",
             unsafe_allow_html=True,
         )

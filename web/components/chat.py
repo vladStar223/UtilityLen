@@ -16,28 +16,31 @@ _QUICK_PROMPTS = [
 
 def render_chat_view(client) -> None:
     """Render the full-screen AI lawyer chat screen."""
+    is_dark = st.session_state.get("theme_dark", True)
+    text_color = "#f8fafc" if is_dark else "#0f172a"
+    text_muted = "#94a3b8" if is_dark else "#475569"
 
     # --- Header ---
     col_icon, col_title, col_status, col_back = st.columns([0.5, 3.5, 2, 1.5])
     with col_icon:
         st.markdown(
-            "<div style='font-size:40px;padding-top:6px;'>⚖️</div>",
+            "<div style='font-size:36px;padding-top:4px;'>⚖️</div>",
             unsafe_allow_html=True,
         )
     with col_title:
         st.markdown(
-            "<div style='padding-top:4px;'>"
-            "<p style='margin:0;font-size:20px;font-weight:700;color:#f8fafc;'>"
-            "AI-Юрист по ЖКХ</p>"
-            "<p style='margin:0;font-size:12px;color:#64748b;'>ПП РФ № 354</p>"
-            "</div>",
+            f"<div style='padding-top:2px;'>"
+            f"<p style='margin:0;font-size:20px;font-weight:700;color:{text_color};'>"
+            f"AI-Юрист по ЖКХ</p>"
+            f"<p style='margin:0;font-size:12px;color:{text_muted};'>ПП РФ № 354</p>"
+            f"</div>",
             unsafe_allow_html=True,
         )
     with col_status:
         st.markdown(
-            "<div style='display:flex;align-items:center;height:100%;padding-top:10px;'>"
-            "<span style='background:#14532d;color:#4ade80;border-radius:12px;"
-            "padding:4px 12px;font-size:13px;font-weight:600;'>"
+            "<div style='display:flex;align-items:center;height:100%;padding-top:8px;'>"
+            "<span style='background:rgba(34,197,94,0.18);color:#16a34a;border:1px solid rgba(34,197,94,0.35);"
+            "border-radius:12px;padding:4px 12px;font-size:12px;font-weight:600;'>"
             "🟢 Контекст квитанции подключен</span></div>",
             unsafe_allow_html=True,
         )
@@ -59,15 +62,15 @@ def render_chat_view(client) -> None:
 
     # --- Quick prompt chips ---
     st.markdown(
-        "<p style='font-size:13px;color:#64748b;margin-bottom:6px;'>"
-        "Быстрые вопросы:</p>",
+        f"<p style='font-size:13px;color:{text_muted};font-weight:600;margin-bottom:6px;'>"
+        f"Быстрые вопросы:</p>",
         unsafe_allow_html=True,
     )
     chip_cols = st.columns(len(_QUICK_PROMPTS))
     triggered_prompt: str | None = None
     for idx, prompt_text in enumerate(_QUICK_PROMPTS):
         with chip_cols[idx]:
-            if st.button(prompt_text, key=f"chip_{idx}"):
+            if st.button(prompt_text, key=f"chip_{idx}", use_container_width=True):
                 triggered_prompt = prompt_text
 
     # --- Render message history ---
