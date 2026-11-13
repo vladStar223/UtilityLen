@@ -51,11 +51,32 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+def _migrate_columns() -> None:
+    """Ensure newly added columns exist in older database tables without Alembic."""
+    from sqlalchemy import inspect, text
+    from app.core.logging import logger
+
+    try:
+        with engine.connect() as conn:
+            inspector = inspect(conn)
+            if "users" in inspector.get_table_names():
+                existing_cols = {col["name"] for col in inspector.get_columns("users")}
+                for col_name in ("first_name", "last_name", "phone", "personal_account", "address"):
+                    if col_name not in existing_cols:
+                        logger.info("Migrating database: adding missing column users.%s", col_name)
+                        conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} VARCHAR"))
+                        conn.commit()
+    except Exception as exc:
+        from app.core.logging import logger
+        logger.warning("Auto-migration note: %s", exc)
+
+
 def init_db() -> None:
     """Create all tables if they do not exist yet and seed the default demo user."""
     from app.db import crud, models  # noqa: F401  (register models on Base.metadata)
 
     Base.metadata.create_all(bind=engine)
+    _migrate_columns()
 
     session = SessionLocal()
     try:
@@ -67,6 +88,16 @@ def init_db() -> None:
                 email="demo@utilitylens.ru",
                 password="demo123",
                 user_id="user_demo_01",
+                first_name="Иван",
+                last_name="Иванов",
+                phone="+7 (900) 123-45-67",
+                personal_account="40702810100000001234",
+                address="г. Владивосток, ул. Светланская, д. 45, кв. 12",
+            )
+        elif not getattr(demo, "first_name", None):
+            crud.update_user_profile(
+                session,
+                demo,
                 first_name="Иван",
                 last_name="Иванов",
                 phone="+7 (900) 123-45-67",

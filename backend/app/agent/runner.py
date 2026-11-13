@@ -134,7 +134,7 @@ async def _call_llm(
     history: Optional[List[Dict[str, str]]] = None,
 ) -> Optional[str]:
     """Best-effort call to an external LLM. Returns None on any failure."""
-    if not _LLM_API_URL:
+    if not _LLM_API_URL or not _LLM_API_KEY:
         return None
     try:
         import httpx
