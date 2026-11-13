@@ -1,15 +1,17 @@
 """Route for the deterministic factor-analysis report."""
 
-import json
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from app import CASES_DIR
 from app.agent.tools import store_comparison
 from app.core.analyzer import analyze
 from app.core.models import BillDocument, ComparisonReport
+from app.db import crud
+from app.db.database import get_db
 
 router = APIRouter()
 
@@ -147,7 +149,7 @@ def _load_case_bills(case_id: str):
         },
     },
 )
-def compare(request: CompareRequest) -> ComparisonReport:
+def compare(request: CompareRequest, db: Session = Depends(get_db)) -> ComparisonReport:
     if request.case_id:
         prev_bill, curr_bill = _load_case_bills(request.case_id)
     elif request.prev_bill is not None and request.curr_bill is not None:
@@ -160,4 +162,10 @@ def compare(request: CompareRequest) -> ComparisonReport:
 
     report = analyze(prev_bill, curr_bill)
     store_comparison(report.comparison_id, report, curr_bill, prev_bill)
+
+    try:
+        crud.save_comparison(db, report, prev_bill, curr_bill)
+    except Exception:
+        db.rollback()
+
     return report

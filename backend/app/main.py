@@ -1,9 +1,19 @@
 """FastAPI entry point for the UtilityLens backend."""
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import cases, chat, compare
+from app.db.database import init_db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
 
 app = FastAPI(
     title="UtilityLens API",
@@ -22,6 +32,7 @@ app = FastAPI(
 Все денежные суммы указываются в рублях и округляются до копеек. Объёмы — в единицах измерения услуги (м3, Гкал, кВт·ч). Проценты — в процентных пунктах.
 """,
     version="0.1.0",
+    lifespan=lifespan,
     openapi_tags=[
         {
             "name": "cases",

@@ -2,11 +2,14 @@
 
 from typing import List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from app.agent.runner import generate_stream
+from app.db import crud
+from app.db.database import get_db
 
 router = APIRouter()
 
@@ -87,7 +90,17 @@ class ChatRequest(BaseModel):
         },
     },
 )
-def chat_stream(request: ChatRequest) -> StreamingResponse:
+def chat_stream(request: ChatRequest, db: Session = Depends(get_db)) -> StreamingResponse:
+    try:
+        crud.save_chat_message(
+            db,
+            comparison_id=request.comparison_id,
+            role="user",
+            content=request.message,
+        )
+    except Exception:
+        db.rollback()
+
     return StreamingResponse(
         generate_stream(request.comparison_id, request.message, request.history),
         media_type="text/event-stream",

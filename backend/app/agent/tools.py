@@ -11,6 +11,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from app.core import cache
 from app.core.models import BillDocument, ComparisonReport
 from app.core.normalizer import display_name
 
@@ -18,11 +19,6 @@ _BACKEND_DIR = Path(__file__).resolve().parents[2]
 _REPO_ROOT = _BACKEND_DIR.parent
 _KB_DIR = _REPO_ROOT / "docs" / "vladivostok_kb_design" / "knowledge_base"
 _LEGACY_KB_DIR = _REPO_ROOT / "data" / "knowledge_base"
-
-#: In-memory registry of computed reports, keyed by ``comparison_id``.
-#: Populated by the ``/api/v1/compare`` endpoint so the chat endpoint can
-#: draft claims against the exact figures of a computed report.
-_REPORTS: Dict[str, Dict[str, Any]] = {}
 
 
 def _load_json(path: Path) -> Any:
@@ -109,16 +105,29 @@ def store_comparison(
     curr_bill: BillDocument,
     prev_bill: BillDocument,
 ) -> None:
-    """Register a computed report for later claim drafting."""
-    _REPORTS[comparison_id] = {
-        "report": report,
-        "curr_bill": curr_bill,
-        "prev_bill": prev_bill,
+    """Register a computed report for later claim drafting.
+
+    The record is serialized to JSON and cached under
+    ``comparison:{comparison_id}`` (Redis with an in-memory fallback).
+    """
+    data = {
+        "report": report.model_dump(mode="json"),
+        "curr_bill": curr_bill.model_dump(mode="json"),
+        "prev_bill": prev_bill.model_dump(mode="json"),
     }
+    cache.set_report(comparison_id, data)
 
 
 def get_report(comparison_id: str) -> Optional[Dict[str, Any]]:
-    return _REPORTS.get(comparison_id)
+    """Return a stored report record, rehydrating the Pydantic models."""
+    data = cache.get_report(comparison_id)
+    if data is None:
+        return None
+    return {
+        "report": ComparisonReport.model_validate(data["report"]),
+        "curr_bill": BillDocument.model_validate(data["curr_bill"]),
+        "prev_bill": BillDocument.model_validate(data["prev_bill"]),
+    }
 
 
 def draft_uk_claim(comparison_id: str, anomaly_code: str) -> Optional[Dict[str, Any]]:
@@ -127,7 +136,7 @@ def draft_uk_claim(comparison_id: str, anomaly_code: str) -> Optional[Dict[str, 
     Exact figures are taken from the computed ``ComparisonReport``; no number
     is ever invented here.
     """
-    record = _REPORTS.get(comparison_id)
+    record = get_report(comparison_id)
     if record is None:
         return None
 

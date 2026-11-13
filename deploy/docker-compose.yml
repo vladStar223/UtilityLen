@@ -1,6 +1,20 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=utilitylens
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+
   backend:
     build:
       context: ./backend
@@ -9,9 +23,14 @@ services:
       - "8000:8000"
     environment:
       - PORT=8000
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/utilitylens
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./contracts:/app/contracts:ro
       - ./data:/app/data:ro
+    depends_on:
+      - db
+      - redis
 
   web:
     build:
@@ -24,3 +43,7 @@ services:
       - API_BASE_URL=http://backend:8000
     depends_on:
       - backend
+
+volumes:
+  postgres_data:
+  redis_data:
