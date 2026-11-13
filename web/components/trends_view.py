@@ -120,14 +120,18 @@ def render_trends_view() -> None:
         summary = analysis_result.get("summary", {})
         factors = analysis_result.get("factor_breakdown", {})
 
-        prev_total = summary.get("prev_total", 5420.0)
-        curr_total = summary.get("curr_total", 6890.5)
-        tar_eff = factors.get("tariff_effect_rub", 180.0)
-        vol_eff = factors.get("volume_effect_rub", 940.5)
+        prev_total = summary.get("prev_total", 5420.0) or 0.0
+        curr_total = summary.get("curr_total", 6890.5) or 0.0
+        tar_eff = factors.get("tariff_effect_rub", 180.0) or 0.0
+        vol_eff = factors.get("volume_effect_rub", 940.5) or 0.0
         recalc_eff = (
-            factors.get("recalculation_effect_rub", 350.0)
-            + factors.get("new_services_effect_rub", 0.0)
+            (factors.get("recalculation_effect_rub", 350.0) or 0.0)
+            + (factors.get("new_services_effect_rub", 0.0) or 0.0)
         )
+
+        def _fmt_delta(val: float) -> str:
+            sign = "+" if val > 0 else ""
+            return f"{sign}{val:,.0f} ₽"
 
         # --- Waterfall chart ---
         fig_waterfall = go.Figure(
@@ -145,9 +149,9 @@ def render_trends_view() -> None:
                 textposition="outside",
                 text=[
                     f"{prev_total:,.0f} ₽",
-                    f"+{tar_eff:,.0f} ₽",
-                    f"+{vol_eff:,.0f} ₽",
-                    f"+{recalc_eff:,.0f} ₽",
+                    _fmt_delta(tar_eff),
+                    _fmt_delta(vol_eff),
+                    _fmt_delta(recalc_eff),
                     f"{curr_total:,.0f} ₽",
                 ],
                 y=[prev_total, tar_eff, vol_eff, recalc_eff, curr_total],
