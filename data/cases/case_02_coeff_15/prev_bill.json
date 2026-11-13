@@ -1,0 +1,53 @@
+{
+  "bill_id": "bill_2026_10_001",
+  "period": "2026-10",
+  "address": "г. Москва, ул. Ленина, д. 15, кв. 34",
+  "payer": "Иванов И.И. (обезличено)",
+  "total_amount": 5420.00,
+  "qr_data": "ST00012|Name=ООО УК Уютный Дом|PersonalAcc=40702810100000001234|BankName=ПАО СБЕРБАНК|BIC=044525225|CorrespAcc=30101810400000000225|PaymPeriod=102026|Sum=542000",
+  "qr_sum_rub": 5420.00,
+  "meters": [
+    {
+      "meter_id": "CW-9921",
+      "service_code": "cold_water",
+      "prev_reading": 124.0,
+      "current_reading": 130.0,
+      "verification_due_date": "2026-10-15"
+    }
+  ],
+  "services": [
+    {
+      "service_code": "cold_water",
+      "raw_name": "Холодное водоснабжение (ХВС)",
+      "unit": "м3",
+      "volume": 6.0,
+      "tariff": 54.00,
+      "coefficient": 1.0,
+      "recalculation": 0.0,
+      "penalty": 0.0,
+      "total": 324.00
+    },
+    {
+      "service_code": "heating",
+      "raw_name": "Отопление",
+      "unit": "Гкал",
+      "volume": 1.1,
+      "tariff": 2800.00,
+      "coefficient": 1.0,
+      "recalculation": 0.0,
+      "penalty": 0.0,
+      "total": 3080.00
+    },
+    {
+      "service_code": "maintenance",
+      "raw_name": "Содержание жилого помещения",
+      "unit": "м2",
+      "volume": 52.0,
+      "tariff": 38.77,
+      "coefficient": 1.0,
+      "recalculation": 0.0,
+      "penalty": 0.0,
+      "total": 2016.00
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+    volumes:
+      - ./contracts:/app/contracts:ro
+      - ./data:/app/data:ro
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"
+    environment:
+      - USE_MOCK_API=false
+      - API_BASE_URL=http://backend:8000
+    depends_on:
+      - backend

@@ -1,0 +1,49 @@
+{
+  "comparison_id": "cmp_2026_10_11",
+  "summary": {
+    "prev_period": "2026-10",
+    "curr_period": "2026-11",
+    "prev_total": 5420.00,
+    "curr_total": 6890.50,
+    "delta_abs": 1470.50,
+    "delta_pct": 27.13,
+    "qr_verified": true,
+    "status_level": "red"
+  },
+  "factor_breakdown": {
+    "tariff_effect_rub": 180.00,
+    "volume_effect_rub": 940.50,
+    "recalculation_effect_rub": 350.00,
+    "new_services_effect_rub": 0.00
+  },
+  "anomalies": [
+    {
+      "code": "APPLYING_COEFF_1_5",
+      "severity": "red",
+      "service_category": "cold_water",
+      "title": "Применен повышающий коэффициент 1.5",
+      "impact_rub": 245.18,
+      "hint": "Истек срок поверки счетчика ХВС или не передавались показания более 3 месяцев."
+    }
+  ],
+  "items": [
+    {
+      "category": "cold_water",
+      "display_name": "Холодное водоснабжение (ХВС)",
+      "unit": "м3",
+      "prev_volume": 6.0,
+      "curr_volume": 8.2,
+      "prev_tariff": 54.00,
+      "curr_tariff": 59.80,
+      "prev_total": 324.00,
+      "curr_total": 735.54,
+      "delta_abs": 411.54,
+      "delta_pct": 127.02,
+      "tariff_delta_rub": 34.80,
+      "volume_delta_rub": 131.56,
+      "coeff_surcharge_rub": 245.18,
+      "status": "red",
+      "plain_explanation": "Расход вырос на 2.2 м³, тариф вырос на 5.80 ₽, плюс начислен штрафной коэффициент 1.5."
+    }
+  ]
+}
