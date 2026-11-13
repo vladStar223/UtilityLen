@@ -1,5 +1,48 @@
 """Upload view for receiving utility bill scans and photos."""
+import json
+
 import streamlit as st
+
+MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+def validate_file(uploaded_file) -> tuple[bool, str]:
+    """Проверяет реальный размер и сигнатуру файла (Magic Bytes)."""
+    if uploaded_file.size > MAX_FILE_SIZE_BYTES:
+        return (
+            False,
+            f"Размер файла ({uploaded_file.size / (1024*1024):.1f} МБ) превышает лимит 10 МБ.",
+        )
+    # Читаем первые 512 байт для проверки сигнатуры
+    header = uploaded_file.read(512)
+    uploaded_file.seek(0)  # Сбрасываем указатель назад
+    name_lower = uploaded_file.name.lower()
+    # Проверка PNG
+    if name_lower.endswith(".png"):
+        if header.startswith(b"\x89PNG\r\n\x1a\n"):
+            return True, "OK"
+        return False, "Файл имеет расширение .png, но не является валидным изображением PNG."
+    # Проверка JPEG
+    if name_lower.endswith((".jpg", ".jpeg")):
+        if header.startswith(b"\xff\xd8\xff"):
+            return True, "OK"
+        return False, "Файл имеет расширение .jpg/.jpeg, но не является валидным изображением JPEG."
+    # Проверка PDF
+    if name_lower.endswith(".pdf"):
+        if header.startswith(b"%PDF-"):
+            return True, "OK"
+        return False, "Файл имеет расширение .pdf, но поврежден или не является валидным PDF."
+    # Проверка JSON
+    if name_lower.endswith(".json"):
+        try:
+            content = uploaded_file.read().decode("utf-8")
+            uploaded_file.seek(0)
+            json.loads(content)
+            return True, "OK"
+        except Exception:
+            uploaded_file.seek(0)
+            return False, "Файл имеет расширение .json, но содержит некорректный синтаксис JSON."
+    return False, "Неподдерживаемый формат файла. Допустимы только PNG, JPG, PDF и JSON."
 
 
 def render_upload_view(client) -> None:
@@ -32,6 +75,11 @@ def render_upload_view(client) -> None:
             )
 
             if uploaded_file is not None:
+                is_valid, error_msg = validate_file(uploaded_file)
+                if not is_valid:
+                    st.error(f"❌ Ошибка валидации файла: {error_msg}")
+                    return
+
                 is_image = (uploaded_file.type or "").startswith("image/")
                 if is_image:
                     st.image(

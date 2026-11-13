@@ -1,5 +1,30 @@
 """Sidebar component with category folders and theme toggle."""
+import html
+
 import streamlit as st
+
+from utils.masking import mask_address, mask_personal_account
+
+
+def _sanitize_case(case: dict) -> dict:
+    return {
+        "case_id": case.get("case_id", ""),
+        "title": html.escape(str(case.get("title", ""))),
+        "description": html.escape(str(case.get("description", ""))),
+        "address": mask_address(str(case.get("address", ""))),
+        "account": mask_personal_account(
+            str(case.get("personal_account", "") or case.get("account", ""))
+        ),
+    }
+
+
+def _render_case_pii(safe_cases: dict, case_id: str) -> None:
+    case = safe_cases.get(case_id)
+    if not case:
+        return
+    details = " ".join(x for x in (case["address"], case["account"]) if x)
+    if details:
+        st.caption(f"📍 {details}")
 
 
 def render_sidebar(cases: list) -> dict:
@@ -14,6 +39,12 @@ def render_sidebar(cases: list) -> dict:
     is_dark = st.session_state.get("theme_dark", False)
     title_color = "#f8fafc" if is_dark else "#0f172a"
     sub_color = "#94a3b8" if is_dark else "#64748b"
+
+    safe_cases = {
+        c["case_id"]: c
+        for c in (_sanitize_case(c) for c in cases)
+        if c.get("case_id")
+    }
 
     st.sidebar.markdown(
         f"<div style='padding: 0.2rem 0 0.6rem 0;'>"
@@ -53,16 +84,19 @@ def render_sidebar(cases: list) -> dict:
         if st.button("🔴 Коэфф. 1.5 (+245.18 ₽)", key="btn_folder_water_spike", use_container_width=True):
             _open_case("case_02_coeff_15")
         st.caption("Окт 2026: базовый счет (324 ₽)")
+        _render_case_pii(safe_cases, "case_02_coeff_15")
 
     with st.sidebar.expander("🔥 Отопление (Гкал)", expanded=True):
         if st.button("🟡 Морозы (+1 700.00 ₽)", key="btn_folder_heat_spike", use_container_width=True):
             _open_case("case_01_heating_spike")
         st.caption("Ноя 2026: скачок потребления тепла")
+        _render_case_pii(safe_cases, "case_01_heating_spike")
 
     with st.sidebar.expander("♨️ Горячая вода (ГВС)", expanded=True):
         if st.button("🔵 Индексация (+450.00 ₽)", key="btn_folder_hot_index", use_container_width=True):
             _open_case("case_03_tariff_index")
         st.caption("Июль 2026: плановый рост тарифов +9%")
+        _render_case_pii(safe_cases, "case_03_tariff_index")
 
     with st.sidebar.expander("⚡ Электричество", expanded=False):
         st.caption("Двухтарифный учет Т1/Т2: 1 240 ₽")

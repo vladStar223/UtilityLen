@@ -1,14 +1,18 @@
 """API Client for interacting with the backend service."""
 import os
 import json
+import logging
 from typing import Generator, Dict, Any, List
 from pathlib import Path
 
 import httpx
 import streamlit as st
 
+logger = logging.getLogger("utilitylens.web")
+
 USE_MOCK_API = os.getenv("USE_MOCK_API", "true").lower() in ("true", "1", "yes")
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+API_KEY = os.getenv("API_KEY", "").strip()
 
 _DEFAULT_AI_SUMMARY = (
     "Детализированный факторный анализ выполнен на бэкенде. "
@@ -20,12 +24,21 @@ class ApiClient:
     def __init__(self):
         self.use_mock = USE_MOCK_API
         self.api_base_url = API_BASE_URL
+        self.api_key = API_KEY
+
+    def _get_headers(self) -> Dict[str, str]:
+        headers = {}
+        if self.api_key:
+            headers["X-API-Key"] = self.api_key
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
 
     def get_cases(self) -> List[Dict[str, Any]]:
         if not self.use_mock:
             try:
                 response = httpx.get(
                     f"{self.api_base_url}/api/v1/cases",
+                    headers=self._get_headers(),
                     timeout=3.0,
                 )
                 response.raise_for_status()
@@ -85,20 +98,41 @@ class ApiClient:
                 return res
             raise ValueError(f"Unknown mock case_id: {case_id}")
 
-        response = httpx.post(
-            f"{self.api_base_url}/api/v1/compare",
-            json={"case_id": case_id},
-            timeout=10.0,
-        )
-        response.raise_for_status()
-        data = response.json()
-        if (
-            "ai_summary" not in data
-            or not data["ai_summary"]
-            or data["ai_summary"] == _DEFAULT_AI_SUMMARY
-        ):
-            data["ai_summary"] = self._synthesize_ai_summary(data)
-        return data
+        try:
+            response = httpx.post(
+                f"{self.api_base_url}/api/v1/compare",
+                json={"case_id": case_id},
+                headers=self._get_headers(),
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+            if (
+                "ai_summary" not in data
+                or not data["ai_summary"]
+                or data["ai_summary"] == _DEFAULT_AI_SUMMARY
+            ):
+                data["ai_summary"] = self._synthesize_ai_summary(data)
+            return data
+        except httpx.HTTPStatusError as exc:
+            logger.error(
+                "HTTP error from backend %s: %s",
+                exc.response.status_code,
+                exc,
+                exc_info=True,
+            )
+            return {
+                "error": (
+                    f"Ошибка сервера аналитики (код {exc.response.status_code}). "
+                    "Попробуйте позже."
+                )
+            }
+        except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            logger.error("Backend connection failed: %s", exc, exc_info=True)
+            return {"error": "Сервер аналитики временно недоступен. Проверьте соединение."}
+        except Exception as exc:
+            logger.error("Unexpected error in compare_bills: %s", exc, exc_info=True)
+            return {"error": "Произошла непредвиденная ошибка при анализе квитанции."}
 
     def chat_stream(self, comparison_id: str, message: str) -> Generator[str, None, None]:
         if self.use_mock:
@@ -118,6 +152,7 @@ class ApiClient:
                     "POST",
                     f"{self.api_base_url}/api/v1/chat/stream",
                     json={"comparison_id": comparison_id, "message": message},
+                    headers=self._get_headers(),
                     timeout=10.0,
                 ) as response:
                     response.raise_for_status()
@@ -140,13 +175,15 @@ class ApiClient:
                             yield payload.get("content", "")
                         elif event_type == "done":
                             break
-            except (httpx.RequestError, httpx.HTTPStatusError):
-                yield "⚠️ Не удалось получить ответ от AI-юриста. Проверьте статус бэкенда."
+            except (httpx.RequestError, httpx.HTTPStatusError) as exc:
+                logger.error("Chat streaming error: %s", exc, exc_info=True)
+                yield "⚠️ Не удалось получить ответ от AI-юриста. Пожалуйста, повторите вопрос позже."
 
     def check_health(self) -> bool:
         try:
             response = httpx.get(
                 f"{self.api_base_url}/health",
+                headers=self._get_headers(),
                 timeout=1.5,
             )
             return response.status_code == 200

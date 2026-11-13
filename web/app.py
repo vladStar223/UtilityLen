@@ -45,6 +45,13 @@ elif screen == "analysis":
         )
     result = st.session_state["analysis_result"]
 
+    if result.get("error"):
+        st.error(f"⚠️ {result['error']}")
+        if st.button("🔄 Повторить попытку"):
+            st.session_state["analysis_result"] = None
+            st.rerun()
+        st.stop()
+
     # 1. KPI Cards
     render_kpi_cards(result.get("summary", {}), result.get("factor_breakdown", {}))
 

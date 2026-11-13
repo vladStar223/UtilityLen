@@ -1,4 +1,6 @@
 """Anomalies and overpayment warnings component supporting both themes."""
+import html
+
 import streamlit as st
 
 
@@ -19,6 +21,10 @@ def render_anomalies(anomalies: list):
         impact = a.get("impact_rub", 0)
         title = a.get("title", "Аномалия")
         hint = a.get("hint", "")
+
+        safe_title = html.escape(str(title))
+        safe_hint = html.escape(str(hint))
+        safe_impact = f"{float(impact or 0):,.2f}"
 
         if is_dark:
             bg_color = "rgba(225, 29, 72, 0.15)" if is_red else "rgba(234, 179, 8, 0.15)"
@@ -50,11 +56,11 @@ def render_anomalies(anomalies: list):
             <div style="display: flex; align-items: center; gap: 8px;">
                 <span style="font-size: 18px;">{icon}</span>
                 <span style="font-size: 16px; font-weight: 700; color: {text_badge_color};">
-                    {title}
+                    {safe_title}
                 </span>
             </div>
             <p style="margin: 6px 0 0 0; font-size: 13px; color: {hint_color}; line-height: 1.5;">
-                <strong>Причина:</strong> {hint}
+                <strong>Причина:</strong> {safe_hint}
             </p>
         </div>
         <div style="text-align: right; min-width: 130px;">
@@ -62,7 +68,7 @@ def render_anomalies(anomalies: list):
                 Переплата
             </span>
             <div style="font-size: 20px; font-weight: 800; color: {impact_color};">
-                +{impact:,.2f} ₽
+                +{safe_impact} ₽
             </div>
         </div>
     </div>

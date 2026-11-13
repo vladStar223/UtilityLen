@@ -1,4 +1,6 @@
 """AI plain-language explanation component supporting both themes."""
+import html
+
 import streamlit as st
 
 
@@ -16,6 +18,8 @@ def render_ai_explanation(ai_summary: str, items: list = None) -> None:
     badge_text = "#ddd6fe" if is_dark else "#5b21b6"
 
     st.markdown("### 🧠 Заключение AI-аналитика («Переводчик на человеческий»)")
+
+    safe_summary = html.escape(str(ai_summary))
 
     card_html = f"""
 <div style="
@@ -52,7 +56,7 @@ def render_ai_explanation(ai_summary: str, items: list = None) -> None:
         color: {text_color};
         font-weight: 500;
     ">
-        {ai_summary}
+        {safe_summary}
     </p>
 </div>
 """
@@ -65,6 +69,6 @@ def render_ai_explanation(ai_summary: str, items: list = None) -> None:
         if item_explanations:
             with st.expander("📋 Построчные пояснения по каждой услуге", expanded=False):
                 for it in item_explanations:
-                    name = it.get("display_name", "Услуга")
-                    expl = it.get("plain_explanation")
+                    name = html.escape(str(it.get("display_name", "Услуга")))
+                    expl = html.escape(str(it.get("plain_explanation", "")))
                     st.markdown(f"• **{name}:** {expl}")

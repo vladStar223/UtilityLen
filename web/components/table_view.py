@@ -2,6 +2,8 @@
 import pandas as pd
 import streamlit as st
 
+from utils.masking import mask_address
+
 
 def render_items_table(items: list) -> None:
     """Render a detailed 'Was / Now' table for all billing line items."""
@@ -14,7 +16,7 @@ def render_items_table(items: list) -> None:
     for item in items:
         rows.append(
             {
-                "Услуга": item.get("display_name", ""),
+                "Услуга": mask_address(item.get("display_name", "")),
                 "Расход": (
                     f"{item.get('prev_volume', 0)} → "
                     f"{item.get('curr_volume', 0)} "
@@ -32,7 +34,7 @@ def render_items_table(items: list) -> None:
                     f"{item.get('delta_abs', 0):+,.2f} ₽ "
                     f"({item.get('delta_pct', 0):+.1f}%)"
                 ),
-                "Пояснение на человеческом": item.get("plain_explanation", ""),
+                "Пояснение на человеческом": mask_address(item.get("plain_explanation", "")),
             }
         )
 
