@@ -26,6 +26,30 @@ def _list_cases() -> List[dict]:
     return cases
 
 
-@router.get("/cases")
+@router.get(
+    "/cases",
+    summary="Список демо-кейсов Владивостока",
+    description="Возвращает список доступных демо-кейсов с метаинформацией (адрес, периоды, краткое описание). Каждый кейс содержит пару квитанций для сравнения.",
+    responses={
+        200: {
+            "description": "Список кейсов успешно получен",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "cases": [
+                            {
+                                "case_id": "vladivostok-lenina-10",
+                                "address": "г. Владивосток, ул. Ленина, д. 10, кв. 25",
+                                "prev_period": "2024-01",
+                                "curr_period": "2024-02",
+                                "description": "Типичная квартира: рост тарифов на отопление и воду"
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+    },
+)
 def list_cases() -> dict:
     return {"cases": _list_cases()}
