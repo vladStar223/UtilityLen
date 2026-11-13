@@ -10,6 +10,11 @@ import streamlit as st
 USE_MOCK_API = os.getenv("USE_MOCK_API", "true").lower() in ("true", "1", "yes")
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
+_DEFAULT_AI_SUMMARY = (
+    "Детализированный факторный анализ выполнен на бэкенде. "
+    "Все составляющие дельты разложены на тарифную и объемную компоненты."
+)
+
 
 class ApiClient:
     def __init__(self):
@@ -17,26 +22,27 @@ class ApiClient:
         self.api_base_url = API_BASE_URL
 
     def get_cases(self) -> List[Dict[str, Any]]:
-        return [
-            {
-                "case_id": "case_02_coeff_15",
-                "title": "Штрафной коэффициент 1.5 (ХВС)",
-                "badge": "red",
-                "description": "Просрочка поверки счетчика ХВС",
-            },
-            {
-                "case_id": "case_01_heating_spike",
-                "title": "Зимний скачок отопления (Морозы)",
-                "badge": "yellow",
-                "description": "Рост потребления Гкал без изменения тарифа",
-            },
-            {
-                "case_id": "case_03_tariff_index",
-                "title": "Индексация тарифов (+9%)",
-                "badge": "yellow",
-                "description": "Плановое повышение стоимости при стабильном объеме",
-            },
-        ]
+        if not self.use_mock:
+            try:
+                response = httpx.get(
+                    f"{self.api_base_url}/api/v1/cases",
+                    timeout=3.0,
+                )
+                response.raise_for_status()
+                cases = response.json().get("cases", [])
+                if cases:
+                    return [
+                        {
+                            "case_id": case.get("case_id", ""),
+                            "title": case.get("title") or case.get("description", ""),
+                            "description": case.get("description", ""),
+                        }
+                        for case in cases
+                        if case.get("case_id")
+                    ]
+            except Exception:
+                pass
+        return self._mock_cases()
 
     def compare_bills(self, case_id: str = "case_02_coeff_15") -> Dict[str, Any]:
         if self.use_mock:
@@ -86,11 +92,12 @@ class ApiClient:
         )
         response.raise_for_status()
         data = response.json()
-        if "ai_summary" not in data:
-            data["ai_summary"] = (
-                "Детализированный факторный анализ выполнен на бэкенде. "
-                "Все составляющие дельты разложены на тарифную и объемную компоненты."
-            )
+        if (
+            "ai_summary" not in data
+            or not data["ai_summary"]
+            or data["ai_summary"] == _DEFAULT_AI_SUMMARY
+        ):
+            data["ai_summary"] = self._synthesize_ai_summary(data)
         return data
 
     def chat_stream(self, comparison_id: str, message: str) -> Generator[str, None, None]:
@@ -106,16 +113,109 @@ class ApiClient:
             for word in text.split(" "):
                 yield word + " "
         else:
-            with httpx.stream(
-                "POST",
-                f"{self.api_base_url}/api/v1/chat/stream",
-                json={"comparison_id": comparison_id, "message": message},
-                timeout=10.0,
-            ) as response:
-                response.raise_for_status()
-                for chunk in response.iter_bytes():
-                    if chunk:
-                        yield chunk.decode("utf-8", errors="replace")
+            try:
+                with httpx.stream(
+                    "POST",
+                    f"{self.api_base_url}/api/v1/chat/stream",
+                    json={"comparison_id": comparison_id, "message": message},
+                    timeout=10.0,
+                ) as response:
+                    response.raise_for_status()
+                    for line in response.iter_lines():
+                        if not line:
+                            continue
+                        if not line.startswith("data:"):
+                            continue
+                        raw_payload = line[len("data:"):].strip()
+                        if not raw_payload:
+                            continue
+                        try:
+                            payload = json.loads(raw_payload)
+                        except json.JSONDecodeError:
+                            continue
+                        if not isinstance(payload, dict):
+                            continue
+                        event_type = payload.get("type")
+                        if event_type == "token":
+                            yield payload.get("content", "")
+                        elif event_type == "done":
+                            break
+            except (httpx.RequestError, httpx.HTTPStatusError):
+                yield "⚠️ Не удалось получить ответ от AI-юриста. Проверьте статус бэкенда."
+
+    def check_health(self) -> bool:
+        try:
+            response = httpx.get(
+                f"{self.api_base_url}/health",
+                timeout=1.5,
+            )
+            return response.status_code == 200
+        except Exception:
+            return False
+
+    @staticmethod
+    def _mock_cases() -> List[Dict[str, Any]]:
+        return [
+            {
+                "case_id": "case_02_coeff_15",
+                "title": "Штрафной коэффициент 1.5 (ХВС)",
+                "badge": "red",
+                "description": "Просрочка поверки счетчика ХВС",
+            },
+            {
+                "case_id": "case_01_heating_spike",
+                "title": "Зимний скачок отопления (Морозы)",
+                "badge": "yellow",
+                "description": "Рост потребления Гкал без изменения тарифа",
+            },
+            {
+                "case_id": "case_03_tariff_index",
+                "title": "Индексация тарифов (+9%)",
+                "badge": "yellow",
+                "description": "Плановое повышение стоимости при стабильном объеме",
+            },
+        ]
+
+    @staticmethod
+    def _synthesize_ai_summary(data: Dict[str, Any]) -> str:
+        summary = data.get("summary", {}) or {}
+        anomalies = data.get("anomalies", []) or []
+        breakdown = data.get("factor_breakdown", {}) or {}
+
+        parts: List[str] = []
+
+        if anomalies:
+            anomaly = anomalies[0]
+            title = anomaly.get("title") or "аномалия"
+            impact = float(anomaly.get("impact_rub") or 0.0)
+            hint = anomaly.get("hint")
+            parts.append(f"Главная аномалия: {title}.")
+            parts.append(f"Сумма переплаты: {impact:.2f} ₽.")
+            if hint:
+                parts.append(f"Рекомендация: {hint}")
+        else:
+            parts.append("Значимых аномалий не выявлено.")
+
+        tariff_effect = float(breakdown.get("tariff_effect_rub") or 0.0)
+        volume_effect = float(breakdown.get("volume_effect_rub") or 0.0)
+        if tariff_effect == 0.0 and volume_effect == 0.0:
+            parts.append("Изменение суммы не связано с изменением тарифов или объемов.")
+        elif abs(tariff_effect) >= abs(volume_effect):
+            parts.append(
+                f"Доминирующий фактор изменения — тарифный эффект ({tariff_effect:+.2f} ₽)."
+            )
+        else:
+            parts.append(
+                f"Доминирующий фактор изменения — объемный эффект ({volume_effect:+.2f} ₽)."
+            )
+
+        qr_verified = summary.get("qr_verified")
+        if qr_verified is True:
+            parts.append("QR-код квитанции успешно верифицирован.")
+        elif qr_verified is False:
+            parts.append("QR-код квитанции не прошел верификацию.")
+
+        return " ".join(parts)
 
     @staticmethod
     def _find_contract_file() -> Path | None:
