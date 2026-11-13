@@ -1,4 +1,4 @@
-"""Streamlit root application — unified clean light theme."""
+"""Streamlit root application — adaptive theme with AI explanation card."""
 import streamlit as st
 
 from api_client import get_api_client
@@ -18,6 +18,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+if "theme_dark" not in st.session_state:
+    st.session_state["theme_dark"] = False
 if "active_screen" not in st.session_state:
     st.session_state["active_screen"] = "analysis"
 if "case_id" not in st.session_state:
@@ -25,8 +27,8 @@ if "case_id" not in st.session_state:
 if "analysis_result" not in st.session_state:
     st.session_state["analysis_result"] = None
 
-# Apply clean unified light theme
-apply_styles()
+# Apply adaptive styles based on selected theme
+apply_styles(st.session_state["theme_dark"])
 
 client = get_api_client()
 cases = client.get_cases()

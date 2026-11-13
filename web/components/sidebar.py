@@ -1,30 +1,40 @@
-"""Sidebar component with category folders — unified light theme."""
+"""Sidebar component with category folders and theme toggle."""
 import streamlit as st
 
 
 def render_sidebar(cases: list) -> dict:
-    """Render the folder-style navigation sidebar in unified light theme."""
+    """Render the folder-style navigation sidebar with theme toggle."""
+    if "theme_dark" not in st.session_state:
+        st.session_state["theme_dark"] = False
     if "active_screen" not in st.session_state:
         st.session_state["active_screen"] = "analysis"
     if "case_id" not in st.session_state:
         st.session_state["case_id"] = "case_02_coeff_15"
 
     st.sidebar.markdown(
-        "<div style='padding: 0.2rem 0 0.8rem 0;'>"
-        "<h2 style='margin:0; font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.02em;'>🏠 UtilityLens</h2>"
-        "<p style='margin: 4px 0 0 0; font-size: 12px; color: #64748b; font-weight: 500;'>Интеллектуальный аудит квитанций ЖКХ</p>"
+        "<div style='padding: 0.2rem 0 0.4rem 0;'>"
+        "<h2 style='margin:0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em;'>🏠 UtilityLens</h2>"
+        "<p style='margin: 4px 0 0 0; font-size: 12px; font-weight: 500; opacity: 0.7;'>Интеллектуальный аудит квитанций ЖКХ</p>"
         "</div>",
         unsafe_allow_html=True,
     )
 
-    # Primary Upload / Home Button
-    if st.sidebar.button("📄 + Загрузить новую квитанцию", key="btn_go_home", use_container_width=True):
-        st.session_state["active_screen"] = "upload"
-        st.rerun()
+    # Top Action Buttons: Theme Toggle & New Bill
+    col_theme, col_home = st.sidebar.columns([1, 1])
+    with col_theme:
+        theme_label = "🌙 Тёмная" if st.session_state["theme_dark"] else "☀️ Светлая"
+        if st.button(theme_label, key="btn_theme_toggle", use_container_width=True):
+            st.session_state["theme_dark"] = not st.session_state["theme_dark"]
+            st.rerun()
+
+    with col_home:
+        if st.button("📄 + Загрузить", key="btn_go_home", use_container_width=True):
+            st.session_state["active_screen"] = "upload"
+            st.rerun()
 
     st.sidebar.markdown("---")
     st.sidebar.markdown(
-        "<p style='margin: 0 0 8px 2px; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;'>📁 Папки услуг (История)</p>",
+        "<p style='margin: 0 0 8px 2px; font-size: 11px; font-weight: 700; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em;'>📁 Папки услуг (История)</p>",
         unsafe_allow_html=True,
     )
 
@@ -66,5 +76,6 @@ def render_sidebar(cases: list) -> dict:
 
     return {
         "active_screen": st.session_state["active_screen"],
+        "theme_dark": st.session_state["theme_dark"],
         "case_id": st.session_state.get("case_id"),
     }
