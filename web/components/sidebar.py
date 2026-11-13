@@ -3,44 +3,61 @@ import streamlit as st
 
 
 def render_sidebar(cases: list) -> dict:
-    """Render the navigation sidebar and return its state."""
+    """Render the folder-style navigation sidebar and mutate session state."""
+    if "theme_dark" not in st.session_state:
+        st.session_state["theme_dark"] = True
+    if "active_screen" not in st.session_state:
+        st.session_state["active_screen"] = "analysis"
+
     st.sidebar.title("🏠 UtilityLens")
     st.sidebar.caption("Интеллектуальный аудит квитанций ЖКХ")
 
-    mode = st.sidebar.radio(
-        "Режим работы:",
-        ["Демо-кейсы (1 клик)", "Загрузить квитанцию"],
-        index=0,
-    )
+    top1, top2 = st.sidebar.columns([4, 1])
+    with top1:
+        if st.button("🏠 Главная", use_container_width=True):
+            st.session_state["active_screen"] = "upload"
+            st.rerun()
+    with top2:
+        theme_icon = "☀️" if st.session_state["theme_dark"] else "🌙"
+        if st.button(theme_icon, use_container_width=True):
+            st.session_state["theme_dark"] = not st.session_state["theme_dark"]
+            st.rerun()
 
-    selected_case_id = "case_02_coeff_15"
-    uploaded_file = None
+    st.sidebar.markdown("---")
 
-    if mode == "Демо-кейсы (1 клик)":
-        case_titles = {c["case_id"]: f"{c['title']}" for c in cases}
-        selected_case_id = st.sidebar.selectbox(
-            "Выберите сценарий:",
-            list(case_titles.keys()),
-            format_func=lambda x: case_titles[x],
-        )
-        case_info = next((c for c in cases if c["case_id"] == selected_case_id), None)
-        if case_info:
-            st.sidebar.info(case_info.get("description", ""))
-    else:
-        uploaded_file = st.sidebar.file_uploader(
-            "Загрузите квитанцию (JSON/PDF)", type=["json", "pdf"]
-        )
-        st.sidebar.caption(
-            "⚠️ В оффлайн-режиме загруженный файл эмулирует разбор через локальный парсер."
-        )
+    def _open_case(case_id: str) -> None:
+        st.session_state["case_id"] = case_id
+        st.session_state["analysis_result"] = None
+        st.session_state["active_screen"] = "analysis"
+        st.rerun()
 
-    trigger = st.sidebar.button(
-        "🔍 Анализировать квитанцию", type="primary", use_container_width=True
-    )
+    with st.sidebar.expander("💧 Холодная вода (ХВС)", expanded=False):
+        if st.button("🔴 Коэфф. 1.5 (+245 ₽)", use_container_width=True):
+            _open_case("case_02_coeff_15")
+
+    with st.sidebar.expander("🔥 Отопление (Гкал)", expanded=False):
+        if st.button("🟡 Морозы (+1 700 ₽)", use_container_width=True):
+            _open_case("case_01_heating_spike")
+
+    with st.sidebar.expander("⚡ Электричество", expanded=False):
+        st.sidebar.info("Двухтарифный Т1/Т2")
+
+    with st.sidebar.expander("♨️ Горячая вода (ГВС)", expanded=False):
+        if st.button("🔵 Индексация +9%", use_container_width=True):
+            _open_case("case_03_tariff_index")
+
+    st.sidebar.markdown("---")
+
+    if st.sidebar.button("📈 График изменения цен", use_container_width=True):
+        st.session_state["active_screen"] = "trends"
+        st.rerun()
+
+    if st.sidebar.button("⚖️ Чат с AI-Юристом", use_container_width=True):
+        st.session_state["active_screen"] = "chat"
+        st.rerun()
 
     return {
-        "mode": mode,
-        "case_id": selected_case_id,
-        "file": uploaded_file,
-        "trigger": trigger,
+        "active_screen": st.session_state["active_screen"],
+        "theme_dark": st.session_state["theme_dark"],
+        "case_id": st.session_state.get("case_id"),
     }
