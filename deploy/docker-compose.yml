@@ -49,12 +49,10 @@ services:
         condition: service_healthy
 
   web:
-    profiles: ["frontend", "full"]
     build:
       context: ../web
       dockerfile: Dockerfile
     ports:
-      - "80:8501"
       - "8501:8501"
     environment:
       - USE_MOCK_API=false

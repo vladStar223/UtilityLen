@@ -10,7 +10,7 @@ import streamlit as st
 
 logger = logging.getLogger("utilitylens.web")
 
-USE_MOCK_API = os.getenv("USE_MOCK_API", "true").lower() in ("true", "1", "yes")
+USE_MOCK_API = os.getenv("USE_MOCK_API", "false").lower() in ("true", "1", "yes")
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 API_KEY = os.getenv("API_KEY", "").strip()
 
@@ -53,8 +53,10 @@ class ApiClient:
                         for case in cases
                         if case.get("case_id")
                     ]
-            except Exception:
-                pass
+                return []
+            except Exception as exc:
+                logger.error("Failed to fetch live cases from backend: %s", exc)
+                return []
         return self._mock_cases()
 
     def compare_bills(self, case_id: str = "case_02_coeff_15") -> Dict[str, Any]:
