@@ -10,6 +10,7 @@ from components.sidebar import render_sidebar
 from components.table_view import render_items_table
 from components.trends_view import render_trends_view
 from components.upload_view import render_upload_view
+from components.user_profile import render_user_profile
 from styles import apply_styles
 
 st.set_page_config(
@@ -68,3 +69,5 @@ elif screen == "trends":
     render_trends_view()
 elif screen == "chat":
     render_chat_view(client)
+elif screen == "profile":
+    render_user_profile(client)

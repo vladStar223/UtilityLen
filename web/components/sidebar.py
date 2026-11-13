@@ -56,12 +56,14 @@ def render_sidebar(cases: list, client=None) -> dict:
 
     st.sidebar.markdown(
         f"<div style='padding: 0.2rem 0 0.4rem 0;'>"
-        f"<h2 style='margin:0; font-size: 24px; font-weight: 800; color: {title_color}; letter-spacing: -0.02em;'>🏠 UtilityLens</h2>"
-        f"<p style='margin: 4px 0 0 0; font-size: 12px; font-weight: 500; color: {sub_color};'>Интеллектуальный аудит квитанций ЖКХ</p>"
+        f"<h2 style='margin:0; font-size: 20px; font-weight: 800; color: {title_color}; letter-spacing: -0.01em;'>UtilityLens</h2>"
         f"</div>",
         unsafe_allow_html=True,
     )
-    st.sidebar.caption("👤 Пользователь: demo@utilitylens.ru (Демо-аккаунт)")
+    
+    if st.sidebar.button("👤 Мой профиль и статистика", key="btn_go_profile", use_container_width=True):
+        st.session_state["active_screen"] = "profile"
+        st.rerun()
 
     # Top Action Buttons: Theme Toggle & New Bill
     col_theme, col_home = st.sidebar.columns([1, 1])
@@ -110,7 +112,7 @@ def render_sidebar(cases: list, client=None) -> dict:
             st.caption("Нет сохранённых расчётов")
 
     st.sidebar.markdown(
-        f"<p style='margin: 12px 0 8px 2px; font-size: 11px; font-weight: 700; color: {sub_color}; text-transform: uppercase; letter-spacing: 0.05em;'>📁 Эталонные демо-кейсы</p>",
+        f"<p style='margin: 12px 0 8px 2px; font-size: 11px; font-weight: 700; color: {sub_color}; text-transform: uppercase; letter-spacing: 0.05em;'>📁 Каталог квитанций по типам услуг</p>",
         unsafe_allow_html=True,
     )
 
@@ -121,26 +123,25 @@ def render_sidebar(cases: list, client=None) -> dict:
         st.rerun()
 
     # Category Folders with clean styling
-    with st.sidebar.expander("💧 Холодная вода (ХВС)", expanded=True):
-        if st.button("🔴 Коэфф. 1.5 (+245.18 ₽)", key="btn_folder_water_spike", use_container_width=True):
+    with st.sidebar.expander("💧 Водоснабжение и водоотведение"):
+        if st.button("ХВС и ГВС, перерасчеты", key="btn_folder_water", use_container_width=True):
             _open_case("case_02_coeff_15")
-        st.caption("Окт 2026: базовый счет (324 ₽)")
-        _render_case_pii(safe_cases, "case_02_coeff_15")
 
-    with st.sidebar.expander("🔥 Отопление (Гкал)", expanded=True):
-        if st.button("🟡 Морозы (+1 700.00 ₽)", key="btn_folder_heat_spike", use_container_width=True):
+    with st.sidebar.expander("🔥 Теплоснабжение"):
+        if st.button("Отопление (по Гкал)", key="btn_folder_heat", use_container_width=True):
             _open_case("case_01_heating_spike")
-        st.caption("Ноя 2026: скачок потребления тепла")
-        _render_case_pii(safe_cases, "case_01_heating_spike")
 
-    with st.sidebar.expander("♨️ Горячая вода (ГВС)", expanded=True):
-        if st.button("🔵 Индексация (+450.00 ₽)", key="btn_folder_hot_index", use_container_width=True):
-            _open_case("case_03_tariff_index")
-        st.caption("Июль 2026: плановый рост тарифов +9%")
-        _render_case_pii(safe_cases, "case_03_tariff_index")
+    with st.sidebar.expander("⚡ Электроснабжение"):
+        if st.button("День/Ночь, соцнорма", key="btn_folder_elec", use_container_width=True):
+            _open_case("case_elec_default")
 
-    with st.sidebar.expander("⚡ Электричество", expanded=False):
-        st.caption("Двухтарифный учет Т1/Т2: 1 240 ₽")
+    with st.sidebar.expander("📑 Единый платежный документ (ЕПД)"):
+        if st.button("Комплексная квитанция", key="btn_folder_epd", use_container_width=True):
+            _open_case("case_epd_default")
+
+    with st.sidebar.expander("🏢 Капитальный ремонт и содержание"):
+        if st.button("Общедомовые нужды", key="btn_folder_cap", use_container_width=True):
+            _open_case("case_cap_default")
 
     st.sidebar.markdown("---")
 

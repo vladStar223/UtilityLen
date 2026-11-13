@@ -64,6 +64,29 @@ class ApiClient:
                 return []
         return self._mock_cases()
 
+    def get_user_profile(self) -> Dict[str, Any]:
+        """Mock profile implementation."""
+        return {
+            "name": "Иван Иванов",
+            "phone": "+7 (999) 000-00-00",
+            "email": "ivan.ivanov@example.com",
+            "address": "г. Владивосток, Океанский пр-кт, д. 28, кв. 14",
+            "account": "1234567890",
+        }
+
+    def get_user_stats(self) -> Dict[str, Any]:
+        """Mock statistics implementation."""
+        return {
+            "total_bills": 142,
+            "total_amount": 785400.0,
+            "anomalies_found": 12,
+            "savings_potential": 24500.0,
+        }
+
+    def update_user_profile(self, data: Dict[str, Any]) -> bool:
+        """Mock profile update implementation."""
+        return True
+
     def compare_bills(self, case_id: str = "case_02_coeff_15") -> Dict[str, Any]:
         if self.use_mock:
             if case_id == "case_02_coeff_15":
@@ -103,6 +126,132 @@ class ApiClient:
                     "Все начисления соответствуют утвержденным региональным нормативам."
                 )
                 return res
+            if case_id == "case_elec_default":
+                return {
+                    "comparison_id": "cmp_elec",
+                    "summary": {
+                        "prev_period": "2026-10",
+                        "curr_period": "2026-11",
+                        "prev_total": 1200.0,
+                        "curr_total": 1350.0,
+                        "delta_abs": 150.0,
+                        "delta_pct": 12.5,
+                        "qr_verified": True,
+                        "status_level": "ok",
+                    },
+                    "factor_breakdown": {
+                        "tariff_effect_rub": 0.0,
+                        "volume_effect_rub": 150.0,
+                        "recalculation_effect_rub": 0.0,
+                        "new_services_effect_rub": 0.0,
+                    },
+                    "anomalies": [],
+                    "items": [
+                        {
+                            "category": "electricity",
+                            "display_name": "Электроснабжение (Т1/Т2)",
+                            "unit": "кВт·ч",
+                            "prev_volume": 250,
+                            "curr_volume": 280,
+                            "prev_tariff": 4.8,
+                            "curr_tariff": 4.8,
+                            "prev_total": 1200.0,
+                            "curr_total": 1350.0,
+                            "delta_abs": 150.0,
+                            "delta_pct": 12.5,
+                            "tariff_delta_rub": 0.0,
+                            "volume_delta_rub": 150.0,
+                            "coeff_surcharge_rub": 0.0,
+                            "status": "ok",
+                            "plain_explanation": "Потребление электроэнергии в пределах нормы.",
+                        }
+                    ],
+                    "ai_summary": "Начисления за электроснабжение соответствуют приборам учета день/ночь. Аномалий не обнаружено.",
+                }
+            if case_id == "case_epd_default":
+                return {
+                    "comparison_id": "cmp_epd",
+                    "summary": {
+                        "prev_period": "2026-10",
+                        "curr_period": "2026-11",
+                        "prev_total": 6500.0,
+                        "curr_total": 6700.0,
+                        "delta_abs": 200.0,
+                        "delta_pct": 3.07,
+                        "qr_verified": True,
+                        "status_level": "ok",
+                    },
+                    "factor_breakdown": {
+                        "tariff_effect_rub": 0.0,
+                        "volume_effect_rub": 200.0,
+                        "recalculation_effect_rub": 0.0,
+                        "new_services_effect_rub": 0.0,
+                    },
+                    "anomalies": [],
+                    "items": [
+                        {
+                            "category": "multiple",
+                            "display_name": "Единый платежный документ",
+                            "unit": "комплекс",
+                            "prev_volume": 1.0,
+                            "curr_volume": 1.0,
+                            "prev_tariff": 6500.0,
+                            "curr_tariff": 6700.0,
+                            "prev_total": 6500.0,
+                            "curr_total": 6700.0,
+                            "delta_abs": 200.0,
+                            "delta_pct": 3.07,
+                            "tariff_delta_rub": 0.0,
+                            "volume_delta_rub": 200.0,
+                            "coeff_surcharge_rub": 0.0,
+                            "status": "ok",
+                            "plain_explanation": "Суммарный ЕПД без расхождений.",
+                        }
+                    ],
+                    "ai_summary": "Единый платежный документ проверен. Общая сумма начислений соответствует нормативам.",
+                }
+            if case_id == "case_cap_default":
+                return {
+                    "comparison_id": "cmp_cap",
+                    "summary": {
+                        "prev_period": "2026-10",
+                        "curr_period": "2026-11",
+                        "prev_total": 850.0,
+                        "curr_total": 850.0,
+                        "delta_abs": 0.0,
+                        "delta_pct": 0.0,
+                        "qr_verified": True,
+                        "status_level": "ok",
+                    },
+                    "factor_breakdown": {
+                        "tariff_effect_rub": 0.0,
+                        "volume_effect_rub": 0.0,
+                        "recalculation_effect_rub": 0.0,
+                        "new_services_effect_rub": 0.0,
+                    },
+                    "anomalies": [],
+                    "items": [
+                        {
+                            "category": "maintenance",
+                            "display_name": "Капитальный ремонт и содержание",
+                            "unit": "кв.м",
+                            "prev_volume": 65.0,
+                            "curr_volume": 65.0,
+                            "prev_tariff": 13.07,
+                            "curr_tariff": 13.07,
+                            "prev_total": 850.0,
+                            "curr_total": 850.0,
+                            "delta_abs": 0.0,
+                            "delta_pct": 0.0,
+                            "tariff_delta_rub": 0.0,
+                            "volume_delta_rub": 0.0,
+                            "coeff_surcharge_rub": 0.0,
+                            "status": "ok",
+                            "plain_explanation": "Тариф фиксирован, изменений нет.",
+                        }
+                    ],
+                    "ai_summary": "Взносы на капитальный ремонт и содержание жилья начислены строго по утвержденной региональной ставке.",
+                }
             raise ValueError(f"Unknown mock case_id: {case_id}")
 
         try:
