@@ -8,7 +8,11 @@ from components.sidebar import render_sidebar
 from components.upload_view import render_upload_view
 from styles import apply_styles
 
-st.set_page_config(page_title="UtilityLens", layout="wide")
+st.set_page_config(
+    page_title="UtilityLens",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 if "theme_dark" not in st.session_state:
     st.session_state["theme_dark"] = True
@@ -23,7 +27,7 @@ apply_styles(st.session_state["theme_dark"])
 
 client = get_api_client()
 cases = client.get_cases()
-render_sidebar(cases)
+sidebar_state = render_sidebar(cases)
 
 screen = st.session_state["active_screen"]
 
@@ -38,6 +42,6 @@ elif screen == "analysis":
     render_kpi_cards(result.get("summary", {}), result.get("factor_breakdown", {}))
     render_anomalies(result.get("anomalies", []))
 elif screen == "trends":
-    st.info("📈 Модуль динамики цен подключается на следующем шаге...")
+    st.info("📈 Модуль мульти-линейного графика динамики цен подключается на Шаге 4...")
 elif screen == "chat":
-    st.info("⚖️ Полноэкранный модуль AI-юриста подключается на следующем шаге...")
+    st.info("⚖️ Полноэкранный модуль AI-юриста подключается на Шаге 4...")
