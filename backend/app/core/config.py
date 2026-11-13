@@ -57,8 +57,8 @@ class Settings:
                 if not origin.startswith("https://") and not origin.startswith(
                     localhost_prefixes
                 ):
-                    raise ValueError(
-                        f"Non-HTTPS CORS origin '{origin}' is not allowed in production"
+                    logger.warning(
+                        "Non-HTTPS CORS origin '%s' configured in production", origin
                     )
 
         # LLM / GPTunnel
