@@ -87,8 +87,14 @@ def _resolve_user(db: Session, user: Optional[User]) -> User:
             email="demo@utilitylens.ru",
             password="demo123",
             user_id="user_demo_01",
+            first_name="Иван",
+            last_name="Иванов",
+            phone="+7 (900) 123-45-67",
+            personal_account="40702810100000001234",
+            address="г. Владивосток, ул. Светланская, д. 45, кв. 12",
         )
     return demo
+
 
 
 def _get_comparison_report(db: Session, comparison_id: str) -> Optional[ComparisonReport]:

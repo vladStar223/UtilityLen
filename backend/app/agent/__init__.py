@@ -1,5 +1,6 @@
 """Agent package for UtilityLens."""
 
+from app.agent.file_agent import BillAnalysisAgent
 from app.agent.parser import (
     DocumentParser,
     JsonBillParser,
@@ -8,8 +9,10 @@ from app.agent.parser import (
 )
 
 __all__ = [
+    "BillAnalysisAgent",
     "DocumentParser",
     "JsonBillParser",
     "PdfBillParser",
     "VisionBillParser",
 ]
+

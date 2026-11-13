@@ -466,21 +466,13 @@ class DocumentParser:
         filename: str,
         mime_type: str = "",
     ) -> BillDocument:
-        """Route file content to appropriate parser based on file extension or MIME type."""
-        ext = Path(filename).suffix.lower()
-        m_type = (mime_type or "").lower()
+        """Route file content to appropriate parser via BillAnalysisAgent."""
+        from app.agent.file_agent import BillAnalysisAgent
 
-        if ext == ".json" or m_type == "application/json":
-            return JsonBillParser.parse(content)
+        return await BillAnalysisAgent.analyze_document(
+            content=content,
+            filename=filename,
+            mime_type=mime_type,
+        )
 
-        if ext == ".pdf" or m_type == "application/pdf":
-            return PdfBillParser.parse(content)
 
-        if ext in {".png", ".jpg", ".jpeg", ".webp"} or m_type.startswith("image/"):
-            if m_type.startswith("image/"):
-                img_mime = m_type
-            else:
-                img_mime = f"image/{ext.lstrip('.').replace('jpg', 'jpeg')}"
-            return await VisionBillParser.parse(content, mime_type=img_mime)
-
-        raise ValueError(f"Unsupported file format: {filename}")

@@ -337,6 +337,11 @@ def create_user(
     email: str,
     password: str,
     user_id: Optional[str] = None,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+    phone: Optional[str] = None,
+    personal_account: Optional[str] = None,
+    address: Optional[str] = None,
 ) -> User:
     """Create and persist a new user account with hashed password."""
     if not user_id:
@@ -348,11 +353,87 @@ def create_user(
         username=username.strip(),
         email=email.strip().lower(),
         hashed_password=hashed,
+        first_name=first_name.strip() if first_name else None,
+        last_name=last_name.strip() if last_name else None,
+        phone=phone.strip() if phone else None,
+        personal_account=personal_account.strip() if personal_account else None,
+        address=address.strip() if address else None,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     return user
+
+
+def update_user_profile(
+    db: Session,
+    user: User,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+    phone: Optional[str] = None,
+    address: Optional[str] = None,
+    personal_account: Optional[str] = None,
+) -> User:
+    """Update profile fields for an existing user."""
+    if first_name is not None:
+        user.first_name = first_name.strip() if first_name else None
+    if last_name is not None:
+        user.last_name = last_name.strip() if last_name else None
+    if phone is not None:
+        user.phone = phone.strip() if phone else None
+    if address is not None:
+        user.address = address.strip() if address else None
+    if personal_account is not None:
+        user.personal_account = personal_account.strip() if personal_account else None
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def calculate_user_stats(db: Session, user_id: str) -> dict:
+    """Calculate aggregated audit statistics for a given user.
+
+    Returns:
+    - total_bills: total number of processed bills.
+    - total_amount_rub: total amount across all user bills.
+    - anomalies_detected: count of detected anomalies across all user comparisons.
+    - overpayment_identified_rub: total amount of identified anomalies/overpayments.
+    - average_monthly_bill_rub: average monthly receipt amount.
+    """
+    bills = get_user_bills(db, user_id)
+    comparisons = get_user_comparisons(db, user_id)
+
+    total_bills = len(bills)
+    total_amount_rub = round(float(sum(Decimal(str(b.total_amount)) for b in bills)), 2) if bills else 0.0
+
+    # Calculate average monthly bill
+    if total_bills > 0:
+        average_monthly_bill_rub = round(total_amount_rub / total_bills, 2)
+    else:
+        average_monthly_bill_rub = 0.0
+
+    # Calculate anomalies and overpayment from comparisons
+    anomalies_detected = 0
+    overpayment_identified_rub = 0.0
+
+    for cmp in comparisons:
+        for anomaly in cmp.anomalies:
+            anomalies_detected += 1
+            impact = float(anomaly.impact_rub) if anomaly.impact_rub is not None else 0.0
+            if impact > 0:
+                overpayment_identified_rub += impact
+
+    overpayment_identified_rub = round(overpayment_identified_rub, 2)
+
+    return {
+        "total_bills": total_bills,
+        "total_amount_rub": total_amount_rub,
+        "anomalies_detected": anomalies_detected,
+        "overpayment_identified_rub": overpayment_identified_rub,
+        "average_monthly_bill_rub": average_monthly_bill_rub,
+    }
+
 
 
 def get_user_bills(db: Session, user_id: str) -> List[Bill]:
