@@ -28,10 +28,14 @@ def render_kpi_cards(summary: dict, factor_breakdown: dict):
         delta_color="inverse",
     )
 
-    vol_eff = factor_breakdown.get("volume_effect_rub", 0)
-    tar_eff = factor_breakdown.get("tariff_effect_rub", 0)
-    driver = "Объем потребления" if vol_eff >= tar_eff else "Рост тарифа"
-    col4.metric("Главный драйвер роста", driver, f"+{max(vol_eff, tar_eff):,.2f} ₽")
+    effects = {
+        "Объем потребления": factor_breakdown.get("volume_effect_rub", 0.0) or 0.0,
+        "Рост тарифа": factor_breakdown.get("tariff_effect_rub", 0.0) or 0.0,
+        "Перерасчет": factor_breakdown.get("recalculation_effect_rub", 0.0) or 0.0,
+        "Новые услуги": factor_breakdown.get("new_services_effect_rub", 0.0) or 0.0,
+    }
+    top_factor, top_value = max(effects.items(), key=lambda x: abs(x[1])) if any(effects.values()) else ("Без изменений", 0.0)
+    col4.metric("Главный драйвер роста", top_factor, f"{top_value:+,.2f} ₽")
 
     if summary.get("qr_verified", False):
         st.success("🛡 **Верифицировано по ГОСТ QR:** Начисления соответствуют банковскому платежному коду")
