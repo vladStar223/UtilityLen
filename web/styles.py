@@ -15,7 +15,7 @@ def apply_styles(is_dark: bool) -> None:
         button_bg = "rgba(196, 181, 253, 0.12)"
         button_border = "rgba(196, 181, 253, 0.35)"
         button_text = "#ede9fe"
-        sidebar_bg = "rgba(23, 21, 32, 0.85)"
+        sidebar_bg = "rgba(23, 21, 32, 0.95)"
     else:
         app_bg = "radial-gradient(circle at 10% 10%, #ede9fe 0%, #f1f5f9 50%, #e2e8f0 100%)"
         text_color = "#1e293b"
@@ -27,37 +27,48 @@ def apply_styles(is_dark: bool) -> None:
         button_bg = "rgba(139, 92, 246, 0.12)"
         button_border = "rgba(139, 92, 246, 0.35)"
         button_text = "#4c1d95"
-        sidebar_bg = "rgba(248, 250, 252, 0.88)"
+        sidebar_bg = "rgba(248, 250, 252, 0.95)"
 
     css = """
 <style>
-/* Keep header transparent but preserve sidebar collapse/expand controls */
-header[data-testid="stHeader"] {
-    background: transparent !important;
+/* 1. FORCE SIDEBAR ALWAYS VISIBLE (Like in the sketch - never collapses) */
+[data-testid="stSidebar"] {
+    display: block !important;
+    transform: none !important;
+    visibility: visible !important;
+    min-width: 320px !important;
+    max-width: 380px !important;
+    background: __SIDEBAR_BG__ !important;
+    backdrop-filter: blur(28px) !important;
+    -webkit-backdrop-filter: blur(28px) !important;
+    border-right: 1px solid __GLASS_BORDER__ !important;
+    box-shadow: __GLASS_SHADOW__ !important;
+    z-index: 99 !important;
 }
-[data-testid="stToolbar"] {
+
+/* Hide collapse button so sidebar never disappears */
+[data-testid="stSidebarCollapseButton"],
+button[data-testid="baseButton-headerNoPadding"],
+[data-testid="stSidebarCollapsedControl"] {
     display: none !important;
 }
-#MainMenu, footer {
-    visibility: hidden;
+
+/* Make main content area adjust properly next to permanent sidebar */
+section.main {
+    margin-left: 0 !important;
 }
 
-/* Ensure sidebar toggle button is always visible and styled */
-[data-testid="stSidebarCollapsedControl"] {
-    display: flex !important;
-    visibility: visible !important;
-    background: __GLASS_BG__ !important;
-    border: 1px solid __GLASS_BORDER__ !important;
-    border-radius: 12px !important;
-    color: __TEXT_COLOR__ !important;
-    box-shadow: __GLASS_SHADOW__ !important;
-    margin: 8px !important;
-    z-index: 100000 !important;
-}
-
+/* Clean background */
 .stApp {
     background: __APP_BG__;
     color: __TEXT_COLOR__;
+}
+
+header[data-testid="stHeader"] {
+    background: transparent !important;
+}
+[data-testid="stToolbar"], #MainMenu, footer {
+    display: none !important;
 }
 
 /* Glass cards: bordered containers, metrics and generic containers */
@@ -80,15 +91,10 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
     padding: 1rem 1.25rem;
 }
 
-/* Sidebar styling */
-[data-testid="stSidebar"] {
-    background: __SIDEBAR_BG__ !important;
-    backdrop-filter: blur(28px) !important;
-    -webkit-backdrop-filter: blur(28px) !important;
-    border-right: 1px solid __GLASS_BORDER__ !important;
-}
+/* Sidebar styling & spacing */
 [data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {
-    gap: 0.6rem !important;
+    gap: 0.65rem !important;
+    padding-top: 1rem !important;
 }
 
 /* Expanders in sidebar */
