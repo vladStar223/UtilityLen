@@ -69,25 +69,33 @@ class ChatRequest(BaseModel):
             },
         },
     },
-    openapi_examples={
-        "basic": {
-            "summary": "Простой вопрос по сравнению",
-            "value": {
-                "comparison_id": "cmp-20240215-abc123",
-                "message": "Почему выросла сумма за отопление?",
-            },
-        },
-        "with_history": {
-            "summary": "Вопрос с историей диалога",
-            "value": {
-                "comparison_id": "cmp-20240215-abc123",
-                "message": "А можно оспорить?",
-                "history": [
-                    {"role": "user", "content": "Почему выросла сумма за отопление?"},
-                    {"role": "assistant", "content": "Тариф вырос на 8.3%..."},
-                ],
-            },
-        },
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "basic": {
+                            "summary": "Простой вопрос по сравнению",
+                            "value": {
+                                "comparison_id": "cmp-20240215-abc123",
+                                "message": "Почему выросла сумма за отопление?",
+                            },
+                        },
+                        "with_history": {
+                            "summary": "Вопрос с историей диалога",
+                            "value": {
+                                "comparison_id": "cmp-20240215-abc123",
+                                "message": "А можно оспорить?",
+                                "history": [
+                                    {"role": "user", "content": "Почему выросла сумма за отопление?"},
+                                    {"role": "assistant", "content": "Тариф вырос на 8.3%..."},
+                                ],
+                            },
+                        },
+                    }
+                }
+            }
+        }
     },
 )
 def chat_stream(request: ChatRequest, db: Session = Depends(get_db)) -> StreamingResponse:

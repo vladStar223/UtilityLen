@@ -105,48 +105,56 @@ def _load_case_bills(case_id: str):
             },
         },
     },
-    openapi_examples={
-        "by_case_id": {
-            "summary": "Анализ по демо-кейсу",
-            "value": {"case_id": "vladivostok-lenina-10"},
-        },
-        "by_bills": {
-            "summary": "Анализ по загруженным квитанциям",
-            "value": {
-                "prev_bill": {
-                    "bill_id": "bill-001",
-                    "period": "2024-01",
-                    "address": "г. Владивосток, ул. Ленина, 10",
-                    "total_amount": 4200.50,
-                    "services": [
-                        {
-                            "service_code": "cold_water",
-                            "raw_name": "Холодное водоснабжение",
-                            "unit": "м3",
-                            "volume": 10.5,
-                            "tariff": 42.00,
-                            "total": 441.00,
-                        }
-                    ],
-                },
-                "curr_bill": {
-                    "bill_id": "bill-002",
-                    "period": "2024-02",
-                    "address": "г. Владивосток, ул. Ленина, 10",
-                    "total_amount": 4520.75,
-                    "services": [
-                        {
-                            "service_code": "cold_water",
-                            "raw_name": "Холодное водоснабжение",
-                            "unit": "м3",
-                            "volume": 12.5,
-                            "tariff": 45.50,
-                            "total": 568.75,
-                        }
-                    ],
-                },
-            },
-        },
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "by_case_id": {
+                            "summary": "Анализ по демо-кейсу",
+                            "value": {"case_id": "vladivostok-lenina-10"},
+                        },
+                        "by_bills": {
+                            "summary": "Анализ по загруженным квитанциям",
+                            "value": {
+                                "prev_bill": {
+                                    "bill_id": "bill-001",
+                                    "period": "2024-01",
+                                    "address": "г. Владивосток, ул. Ленина, 10",
+                                    "total_amount": 4200.50,
+                                    "services": [
+                                        {
+                                            "service_code": "cold_water",
+                                            "raw_name": "Холодное водоснабжение",
+                                            "unit": "м3",
+                                            "volume": 10.5,
+                                            "tariff": 42.00,
+                                            "total": 441.00,
+                                        }
+                                    ],
+                                },
+                                "curr_bill": {
+                                    "bill_id": "bill-002",
+                                    "period": "2024-02",
+                                    "address": "г. Владивосток, ул. Ленина, 10",
+                                    "total_amount": 4520.75,
+                                    "services": [
+                                        {
+                                            "service_code": "cold_water",
+                                            "raw_name": "Холодное водоснабжение",
+                                            "unit": "м3",
+                                            "volume": 12.5,
+                                            "tariff": 45.50,
+                                            "total": 568.75,
+                                        }
+                                    ],
+                                },
+                            },
+                        },
+                    }
+                }
+            }
+        }
     },
 )
 def compare(request: CompareRequest, db: Session = Depends(get_db)) -> ComparisonReport:

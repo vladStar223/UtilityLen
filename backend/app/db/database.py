@@ -18,14 +18,18 @@ class Base(DeclarativeBase):
     """Declarative base for all ORM models (see ``app.db.models``)."""
 
 
+_db_url = settings.DATABASE_URL
+if _db_url.startswith("postgresql://"):
+    _db_url = _db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+
 _connect_args = (
     {"check_same_thread": False}
-    if settings.DATABASE_URL.startswith("sqlite")
+    if _db_url.startswith("sqlite")
     else {}
 )
 
 engine = create_engine(
-    settings.DATABASE_URL,
+    _db_url,
     connect_args=_connect_args,
     future=True,
 )
