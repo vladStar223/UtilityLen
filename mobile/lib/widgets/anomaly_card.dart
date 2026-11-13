@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../core/models.dart';
 import '../core/theme.dart';
 
+/// Glassmorphic anomaly card — ported from web/components/anomalies.py
 class AnomalyCard extends StatelessWidget {
   final AnomalyItem anomaly;
   final VoidCallback? onDraftClaim;
@@ -15,86 +16,142 @@ class AnomalyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat("#,##0.00", "ru_RU");
-    final isRed = anomaly.severity == "red";
+    final currency = NumberFormat('#,##0.00', 'ru_RU');
+    final isRed = anomaly.severity == 'red';
+    final statusStyle = isRed ? StatusBadgeStyle.error : StatusBadgeStyle.warning;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isRed ? AppTheme.alertRedBg : AppTheme.warningYellowBg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            statusStyle.color.withOpacity(0.10),
+            statusStyle.color.withOpacity(0.04),
+          ],
+        ),
         border: Border.all(
-          color: (isRed ? AppTheme.alertRed : AppTheme.warningYellow).withOpacity(0.4),
+          color: statusStyle.color.withOpacity(0.35),
           width: 1.2,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: statusStyle.color.withOpacity(0.12),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                isRed ? Icons.error_outline : Icons.warning_amber_rounded,
-                color: isRed ? AppTheme.alertRed : AppTheme.warningYellow,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  anomaly.title,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: isRed ? AppTheme.alertRed : AppTheme.warningYellow,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header row: icon + title + impact badge
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: statusStyle.color.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    isRed ? Icons.error_outline_rounded : Icons.warning_amber_rounded,
+                    color: statusStyle.color,
+                    size: 18,
                   ),
                 ),
-              ),
-              if (anomaly.impactRub > 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.alertRed,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                const SizedBox(width: 10),
+                Expanded(
                   child: Text(
-                    "+${currency.format(anomaly.impactRub)} ₽",
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                    anomaly.title,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: statusStyle.color,
+                      height: 1.3,
                     ),
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            anomaly.hint,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.white.withOpacity(0.85),
-              height: 1.4,
+                if (anomaly.impactRub > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: statusStyle.color,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '+${currency.format(anomaly.impactRub)} ₽',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+              ],
             ),
-          ),
-          if (onDraftClaim != null && isRed) ...[
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: onDraftClaim,
-                icon: const Icon(Icons.description_outlined, size: 16),
-                label: const Text("Составить досудебную претензию"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.alertRed,
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                ),
+            const SizedBox(height: 10),
+
+            // Category badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: statusStyle.badgeDecoration,
+              child: Text(
+                _categoryLabel(anomaly.serviceCategory),
+                style: statusStyle.labelStyle,
               ),
             ),
+            const SizedBox(height: 10),
+
+            // Hint text
+            Text(
+              anomaly.hint,
+              style: const TextStyle(
+                fontSize: 12.5,
+                color: AppColors.textSecondary,
+                height: 1.45,
+              ),
+            ),
+
+            // Draft claim CTA for red anomalies
+            if (onDraftClaim != null && isRed) ...[
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: onDraftClaim,
+                  icon: const Icon(Icons.description_outlined, size: 16),
+                  label: const Text('Составить досудебную претензию'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.alertRed,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
+  }
+
+  String _categoryLabel(String category) {
+    return switch (category.toLowerCase()) {
+      'хвс' || 'cold_water' || 'cws' => '💧 ХВС',
+      'отопление' || 'heating' => '🔥 Отопление',
+      'гвс' || 'hot_water' || 'dhw' => '♨️ ГВС',
+      'электроэнергия' || 'electricity' || 'power' => '⚡ Электроэнергия',
+      _ => anomaly.serviceCategory.isNotEmpty ? anomaly.serviceCategory.toUpperCase() : 'ЖКУ',
+    };
   }
 }
