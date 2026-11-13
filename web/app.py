@@ -3,8 +3,10 @@ import streamlit as st
 
 from api_client import get_api_client
 from components.anomalies import render_anomalies
+from components.chat import render_chat_view
 from components.kpi_cards import render_kpi_cards
 from components.sidebar import render_sidebar
+from components.trends_view import render_trends_view
 from components.upload_view import render_upload_view
 from styles import apply_styles
 
@@ -42,6 +44,6 @@ elif screen == "analysis":
     render_kpi_cards(result.get("summary", {}), result.get("factor_breakdown", {}))
     render_anomalies(result.get("anomalies", []))
 elif screen == "trends":
-    st.info("📈 Модуль мульти-линейного графика динамики цен подключается на Шаге 4...")
+    render_trends_view()
 elif screen == "chat":
-    st.info("⚖️ Полноэкранный модуль AI-юриста подключается на Шаге 4...")
+    render_chat_view(client)
