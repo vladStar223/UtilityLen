@@ -93,10 +93,6 @@ def render_upload_view(client) -> None:
                         f"({uploaded_file.type or 'неизвестный тип'})"
                     )
 
-                st.success(
-                    "🛡 Верифицировано по ГОСТ QR: Платежный код распознан"
-                )
-
                 if st.button(
                     "🔍 Перейти к анализу начислений",
                     type="primary",

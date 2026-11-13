@@ -18,7 +18,10 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 import httpx
-import pypdf
+try:
+    import pypdf
+except ImportError:
+    pypdf = None
 
 from app.core.models import BillDocument, MeterReading, ServiceLine
 
@@ -125,6 +128,10 @@ class PdfBillParser:
     @classmethod
     def _extract_text(cls, content: bytes) -> str:
         """Extract combined text content from all pages of the PDF."""
+        if pypdf is None:
+            raise RuntimeError(
+                "Библиотека pypdf не установлена. Для обработки PDF файлов выполните: pip install pypdf"
+            )
         reader = pypdf.PdfReader(io.BytesIO(content))
         pages_text: List[str] = []
         for page in reader.pages:

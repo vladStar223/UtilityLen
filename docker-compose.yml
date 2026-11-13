@@ -1,0 +1,4 @@
+# UtilityLens root compose proxy
+# Points directly to deploy/docker-compose.yml so `docker compose` commands work from root
+include:
+  - path: deploy/docker-compose.yml
