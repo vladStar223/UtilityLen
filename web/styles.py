@@ -5,49 +5,49 @@ import streamlit as st
 def apply_styles(is_dark: bool = False, *args, **kwargs) -> None:
     """Inject glassmorphism styles with high contrast and pixel-perfect theme support."""
     if is_dark:
-        app_bg = "radial-gradient(circle at 15% 15%, #2e2640 0%, #171520 50%, #0d0c14 100%)"
+        app_bg = "#0f172a"
         text_color = "#f8fafc"
         text_muted = "#94a3b8"
-        glass_bg = "rgba(255, 255, 255, 0.06)"
-        glass_border = "rgba(255, 255, 255, 0.14)"
-        glass_shadow = "0 15px 35px rgba(0,0,0,0.45)"
-        sidebar_bg = "rgba(23, 21, 32, 0.96)"
-        expander_bg = "rgba(255, 255, 255, 0.04)"
-        button_bg = "rgba(196, 181, 253, 0.12)"
-        button_border = "rgba(196, 181, 253, 0.35)"
-        button_text = "#ede9fe"
-        accent_strong = "#7c3aed"
-        accent = "#a78bfa"
-        input_bg = "rgba(30, 27, 43, 0.9)"
-        chat_bg = "rgba(255, 255, 255, 0.06)"
-        alert_qr_bg = "rgba(6, 78, 59, 0.45)"
-        alert_qr_border = "rgba(16, 185, 129, 0.4)"
+        glass_bg = "#1e293b"
+        glass_border = "#334155"
+        glass_shadow = "0 4px 16px rgba(0, 0, 0, 0.3)"
+        sidebar_bg = "#0b1120"
+        expander_bg = "#1e293b"
+        button_bg = "#1e293b"
+        button_border = "#334155"
+        button_text = "#f8fafc"
+        accent_strong = "#2563eb"
+        accent = "#3b82f6"
+        input_bg = "#1e293b"
+        chat_bg = "#1e293b"
+        alert_qr_bg = "#064e3b"
+        alert_qr_border = "#059669"
         alert_qr_text = "#6ee7b7"
-        delta_pill_bg = "rgba(255, 255, 255, 0.08)"
-        delta_pill_border = "rgba(255, 255, 255, 0.15)"
-        delta_pill_text = "#fda4af"
+        delta_pill_bg = "rgba(239, 68, 68, 0.15)"
+        delta_pill_border = "rgba(239, 68, 68, 0.3)"
+        delta_pill_text = "#f87171"
     else:
-        app_bg = "radial-gradient(circle at 10% 10%, #ede9fe 0%, #f8fafc 50%, #f1f5f9 100%)"
+        app_bg = "#f8fafc"
         text_color = "#0f172a"
-        text_muted = "#475569"
+        text_muted = "#64748b"
         glass_bg = "#ffffff"
         glass_border = "#e2e8f0"
-        glass_shadow = "0 4px 20px rgba(0, 0, 0, 0.04)"
-        sidebar_bg = "rgba(255, 255, 255, 0.96)"
+        glass_shadow = "0 2px 10px rgba(0, 0, 0, 0.04)"
+        sidebar_bg = "#ffffff"
         expander_bg = "#ffffff"
         button_bg = "#ffffff"
         button_border = "#e2e8f0"
         button_text = "#0f172a"
-        accent_strong = "#7c3aed"
-        accent = "#8b5cf6"
+        accent_strong = "#1d4ed8"
+        accent = "#2563eb"
         input_bg = "#ffffff"
         chat_bg = "#ffffff"
-        alert_qr_bg = "#ecfdf5"
-        alert_qr_border = "#a7f3d0"
-        alert_qr_text = "#065f46"
-        delta_pill_bg = "rgba(0, 0, 0, 0.04)"
-        delta_pill_border = "rgba(0, 0, 0, 0.08)"
-        delta_pill_text = "#be123c"
+        alert_qr_bg = "#f0fdf4"
+        alert_qr_border = "#86efac"
+        alert_qr_text = "#166534"
+        delta_pill_bg = "#fef2f2"
+        delta_pill_border = "#fecaca"
+        delta_pill_text = "#b91c1c"
 
     css = """
 <style>
@@ -59,11 +59,17 @@ def apply_styles(is_dark: bool = False, *args, **kwargs) -> None:
 }
 
 header[data-testid="stHeader"] {
-    background: transparent !important;
+    display: none !important;
+    height: 0 !important;
 }
 
-[data-testid="stToolbar"], #MainMenu, footer {
-    display: none !important;
+[data-testid="stSidebarContent"],
+[data-testid="stSidebar"] > div:first-child {
+    padding-top: 0.5rem !important;
+}
+
+.main .block-container {
+    padding-top: 1rem !important;
 }
 
 /* 2. SIDEBAR - FIXED & CRISP GLASS */
@@ -230,7 +236,7 @@ div.stAlert * {
     border-color: __ACCENT_STRONG__ !important;
     color: #ffffff !important;
     transform: translateY(-1px) !important;
-    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.25) !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2) !important;
 }
 
 .stButton > button[kind="primary"] {
