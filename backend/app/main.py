@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from app.api import auth, cases, chat, compare
+from app.api import auth, bills, cases, chat, compare
 from app.core.config import settings
 from app.core.logging import logger
 from app.core.rate_limit import limiter
@@ -56,6 +56,14 @@ app = FastAPI(
         {
             "name": "chat",
             "description": "AI-юрист — стриминговый диалог (SSE) с AI-помощником по контексту проведённого сравнения.",
+        },
+        {
+            "name": "bills",
+            "description": "Загрузка квитанций ЖКХ (PDF, фото, JSON) и история загрузок.",
+        },
+        {
+            "name": "comparisons",
+            "description": "История факторных анализов и получение сохранённых отчётов.",
         },
         {
             "name": "system",
@@ -129,6 +137,8 @@ app.include_router(auth.router, prefix=API_PREFIX + "/auth", tags=["auth"])
 app.include_router(cases.router, prefix=API_PREFIX, tags=["cases"])
 app.include_router(compare.router, prefix=API_PREFIX, tags=["compare"])
 app.include_router(chat.router, prefix=API_PREFIX, tags=["chat"])
+app.include_router(bills.bills_router, prefix=API_PREFIX + "/bills", tags=["bills"])
+app.include_router(bills.comparisons_router, prefix=API_PREFIX + "/comparisons", tags=["comparisons"])
 
 
 @app.get("/health", tags=["system"], summary="Проверка работоспособности", description="Возвращает статус сервиса. Используется для health-check и мониторинга.", responses={200: {"description": "Сервис работает нормально", "content": {"application/json": {"example": {"status": "ok"}}}}})

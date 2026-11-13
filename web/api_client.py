@@ -25,12 +25,15 @@ class ApiClient:
         self.use_mock = USE_MOCK_API
         self.api_base_url = API_BASE_URL
         self.api_key = API_KEY
+        self.auth_token = os.getenv("AUTH_TOKEN", "").strip()
 
     def _get_headers(self) -> Dict[str, str]:
         headers = {}
         if self.api_key:
             headers["X-API-Key"] = self.api_key
-            headers["Authorization"] = f"Bearer {self.api_key}"
+        token = self.auth_token or self.api_key
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
         return headers
 
     def get_cases(self) -> List[Dict[str, Any]]:
@@ -191,6 +194,130 @@ class ApiClient:
             return response.status_code == 200
         except Exception:
             return False
+
+    def upload_bill(self, uploaded_file) -> Dict[str, Any]:
+        """Upload a bill file (image/PDF/JSON) for parsing and factor comparison."""
+        if self.use_mock:
+            mock_res = self._coeff_15_mock()
+            mock_res["ai_summary"] = self._synthesize_ai_summary(mock_res)
+            return mock_res
+
+        try:
+            filename = getattr(uploaded_file, "name", "bill.pdf")
+            content = (
+                uploaded_file.getvalue()
+                if hasattr(uploaded_file, "getvalue")
+                else uploaded_file.read()
+            )
+            mime_type = getattr(uploaded_file, "type", "") or "application/octet-stream"
+
+            files = {"file": (filename, content, mime_type)}
+            response = httpx.post(
+                f"{self.api_base_url}/api/v1/bills/upload",
+                files=files,
+                headers=self._get_headers(),
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+            if (
+                "ai_summary" not in data
+                or not data["ai_summary"]
+                or data["ai_summary"] == _DEFAULT_AI_SUMMARY
+            ):
+                data["ai_summary"] = self._synthesize_ai_summary(data)
+            return data
+        except httpx.HTTPStatusError as exc:
+            logger.error(
+                "HTTP error during upload (%s): %s",
+                exc.response.status_code,
+                exc,
+                exc_info=True,
+            )
+            detail = ""
+            try:
+                detail = exc.response.json().get("detail", "")
+            except Exception:
+                pass
+            return {"error": detail or f"Ошибка сервера (код {exc.response.status_code})"}
+        except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            logger.error("Backend connection failed: %s", exc, exc_info=True)
+            return {"error": "Сервер аналитики временно недоступен. Проверьте соединение."}
+        except Exception as exc:
+            logger.error("Unexpected error in upload_bill: %s", exc, exc_info=True)
+            return {"error": f"Ошибка при загрузке квитанции: {str(exc)}"}
+
+    def get_comparisons_history(self) -> List[Dict[str, Any]]:
+        """Fetch list of user's past comparison reports."""
+        if self.use_mock:
+            return [
+                {
+                    "comparison_id": "cmp_2026_10_11",
+                    "delta_abs": 1470.5,
+                    "delta_pct": 27.13,
+                    "status_level": "red",
+                    "created_at": "2026-11-13T10:00:00",
+                    "summary": {
+                        "curr_period": "2026-11",
+                        "prev_period": "2026-10",
+                    },
+                }
+            ]
+
+        try:
+            response = httpx.get(
+                f"{self.api_base_url}/api/v1/comparisons/history",
+                headers=self._get_headers(),
+                timeout=5.0,
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as exc:
+            logger.error("Failed to fetch comparisons history: %s", exc)
+            return []
+
+    def get_comparison(self, comparison_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch a specific comparison report by its ID."""
+        if self.use_mock:
+            mock_res = self._coeff_15_mock()
+            mock_res["comparison_id"] = comparison_id
+            mock_res["ai_summary"] = self._synthesize_ai_summary(mock_res)
+            return mock_res
+
+        try:
+            response = httpx.get(
+                f"{self.api_base_url}/api/v1/comparisons/{comparison_id}",
+                headers=self._get_headers(),
+                timeout=5.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+            if (
+                "ai_summary" not in data
+                or not data["ai_summary"]
+                or data["ai_summary"] == _DEFAULT_AI_SUMMARY
+            ):
+                data["ai_summary"] = self._synthesize_ai_summary(data)
+            return data
+        except Exception as exc:
+            logger.error("Failed to fetch comparison %s: %s", comparison_id, exc)
+            return None
+
+    def get_bills_history(self) -> List[Dict[str, Any]]:
+        """Fetch list of user's uploaded bills."""
+        if self.use_mock:
+            return []
+        try:
+            response = httpx.get(
+                f"{self.api_base_url}/api/v1/bills/history",
+                headers=self._get_headers(),
+                timeout=5.0,
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as exc:
+            logger.error("Failed to fetch bills history: %s", exc)
+            return []
 
     @staticmethod
     def _mock_cases() -> List[Dict[str, Any]]:

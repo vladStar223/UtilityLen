@@ -102,8 +102,12 @@ def render_upload_view(client) -> None:
                     type="primary",
                     use_container_width=True,
                 ):
-                    st.session_state["analysis_result"] = client.compare_bills(
-                        st.session_state.get("case_id", "case_02_coeff_15")
-                    )
-                    st.session_state["active_screen"] = "analysis"
-                    st.rerun()
+                    with st.spinner("⏳ Анализируем квитанцию через мультимодальный конвейер..."):
+                        result = client.upload_bill(uploaded_file)
+                    if result.get("error"):
+                        st.error(f"❌ Ошибка: {result['error']}")
+                    else:
+                        st.session_state["analysis_result"] = result
+                        st.session_state["active_screen"] = "analysis"
+                        st.session_state["comparison_id"] = result.get("comparison_id", "")
+                        st.rerun()

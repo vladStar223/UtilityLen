@@ -32,7 +32,7 @@ apply_styles(st.session_state["theme_dark"])
 
 client = get_api_client()
 cases = client.get_cases()
-sidebar_state = render_sidebar(cases)
+sidebar_state = render_sidebar(cases, client=client)
 
 screen = st.session_state["active_screen"]
 

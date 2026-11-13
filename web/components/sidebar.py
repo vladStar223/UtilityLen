@@ -27,8 +27,16 @@ def _render_case_pii(safe_cases: dict, case_id: str) -> None:
         st.caption(f"📍 {details}")
 
 
-def render_sidebar(cases: list) -> dict:
-    """Render the folder-style navigation sidebar with theme toggle."""
+def render_sidebar(cases: list, client=None) -> dict:
+    """Render the folder-style navigation sidebar with theme toggle and calculation history."""
+    if client is None:
+        try:
+            from api_client import get_api_client
+
+            client = get_api_client()
+        except Exception:
+            client = None
+
     if "theme_dark" not in st.session_state:
         st.session_state["theme_dark"] = False
     if "active_screen" not in st.session_state:
@@ -47,12 +55,13 @@ def render_sidebar(cases: list) -> dict:
     }
 
     st.sidebar.markdown(
-        f"<div style='padding: 0.2rem 0 0.6rem 0;'>"
+        f"<div style='padding: 0.2rem 0 0.4rem 0;'>"
         f"<h2 style='margin:0; font-size: 24px; font-weight: 800; color: {title_color}; letter-spacing: -0.02em;'>🏠 UtilityLens</h2>"
         f"<p style='margin: 4px 0 0 0; font-size: 12px; font-weight: 500; color: {sub_color};'>Интеллектуальный аудит квитанций ЖКХ</p>"
         f"</div>",
         unsafe_allow_html=True,
     )
+    st.sidebar.caption("👤 Пользователь: demo@utilitylens.ru (Демо-аккаунт)")
 
     # Top Action Buttons: Theme Toggle & New Bill
     col_theme, col_home = st.sidebar.columns([1, 1])
@@ -68,8 +77,40 @@ def render_sidebar(cases: list) -> dict:
             st.rerun()
 
     st.sidebar.markdown("---")
+
+    # User's calculations history
+    with st.sidebar.expander("📜 Моя история расчётов", expanded=True):
+        history = []
+        if client is not None:
+            try:
+                history = client.get_comparisons_history()
+            except Exception:
+                history = []
+
+        if history:
+            for idx, item in enumerate(history):
+                c_id = item.get("comparison_id", "")
+                delta = float(item.get("delta_abs", 0.0))
+                summary = item.get("summary", {}) or {}
+                period = summary.get("curr_period") or item.get("created_at", "")[:10]
+                status = item.get("status_level", "ok")
+                icon = "🔴" if status == "red" else ("🟡" if status == "yellow" else "🟢")
+                btn_label = f"{icon} {period} ({delta:+,.2f} ₽)"
+                if st.button(btn_label, key=f"hist_{c_id}_{idx}", use_container_width=True):
+                    with st.spinner("Загрузка отчёта..."):
+                        report = client.get_comparison(c_id)
+                    if report and not report.get("error"):
+                        st.session_state["analysis_result"] = report
+                        st.session_state["comparison_id"] = c_id
+                        st.session_state["active_screen"] = "analysis"
+                        st.rerun()
+                    elif report and report.get("error"):
+                        st.error(report["error"])
+        else:
+            st.caption("Нет сохранённых расчётов")
+
     st.sidebar.markdown(
-        f"<p style='margin: 0 0 8px 2px; font-size: 11px; font-weight: 700; color: {sub_color}; text-transform: uppercase; letter-spacing: 0.05em;'>📁 Папки услуг (История)</p>",
+        f"<p style='margin: 12px 0 8px 2px; font-size: 11px; font-weight: 700; color: {sub_color}; text-transform: uppercase; letter-spacing: 0.05em;'>📁 Эталонные демо-кейсы</p>",
         unsafe_allow_html=True,
     )
 

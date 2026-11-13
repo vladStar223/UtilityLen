@@ -1,6 +1,8 @@
 """Security regression tests for the API surface (Block 1)."""
 
 import pytest
+
+pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
