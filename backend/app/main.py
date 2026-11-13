@@ -9,11 +9,12 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from app.api import auth, bills, cases, chat, compare
+from app.api import auth, bills, cases, chat, compare, user
 from app.core.config import settings
 from app.core.logging import logger
 from app.core.rate_limit import limiter
 from app.db.database import init_db
+
 
 
 @asynccontextmanager
@@ -44,6 +45,10 @@ app = FastAPI(
         {
             "name": "auth",
             "description": "Аутентификация пользователей, регистрация и получение профиля.",
+        },
+        {
+            "name": "user",
+            "description": "Профиль пользователя и агрегированная статистика аудита квитанций.",
         },
         {
             "name": "cases",
@@ -134,11 +139,13 @@ async def add_security_headers(request, call_next):
 
 API_PREFIX = "/api/v1"
 app.include_router(auth.router, prefix=API_PREFIX + "/auth", tags=["auth"])
+app.include_router(user.router, prefix=API_PREFIX + "/user", tags=["user"])
 app.include_router(cases.router, prefix=API_PREFIX, tags=["cases"])
 app.include_router(compare.router, prefix=API_PREFIX, tags=["compare"])
 app.include_router(chat.router, prefix=API_PREFIX, tags=["chat"])
 app.include_router(bills.bills_router, prefix=API_PREFIX + "/bills", tags=["bills"])
 app.include_router(bills.comparisons_router, prefix=API_PREFIX + "/comparisons", tags=["comparisons"])
+
 
 
 @app.get("/health", tags=["system"], summary="Проверка работоспособности", description="Возвращает статус сервиса. Используется для health-check и мониторинга.", responses={200: {"description": "Сервис работает нормально", "content": {"application/json": {"example": {"status": "ok"}}}}})
