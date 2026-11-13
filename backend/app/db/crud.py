@@ -1,12 +1,14 @@
 """CRUD operations mapping the Pydantic domain models to the ORM tables."""
 
 import re
+import uuid
 from datetime import date
 from decimal import Decimal
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
+from app.core.auth import hash_password
 from app.core.logging import logger
 from app.core.models import BillDocument, ComparisonReport
 from app.db.models import (
@@ -16,6 +18,7 @@ from app.db.models import (
     Comparison,
     ComparisonAnomaly,
     MeterReading,
+    User,
 )
 from app.ingestion.qr_parser import extract_sum_rub, verify_qr_sum
 
@@ -41,7 +44,7 @@ def mask_qr_personal_data(qr_raw: str) -> str:
     return _PERSONAL_ACC_RE.sub(r"\1****\2", qr_raw)
 
 
-def save_bill(db: Session, bill_doc: BillDocument) -> Bill:
+def save_bill(db: Session, bill_doc: BillDocument, user_id: Optional[str] = None) -> Bill:
     """Persist a receipt together with its services and meter readings.
 
     Idempotent: an existing receipt with the same ``bill_id`` is returned
@@ -49,6 +52,10 @@ def save_bill(db: Session, bill_doc: BillDocument) -> Bill:
     """
     existing = db.query(Bill).filter(Bill.bill_id == bill_doc.bill_id).first()
     if existing is not None:
+        if user_id and not existing.user_id:
+            existing.user_id = user_id
+            db.commit()
+            db.refresh(existing)
         return existing
 
     qr_sum = bill_doc.qr_sum_rub
@@ -58,6 +65,7 @@ def save_bill(db: Session, bill_doc: BillDocument) -> Bill:
 
     bill = Bill(
         bill_id=bill_doc.bill_id,
+        user_id=user_id,
         period=bill_doc.period,
         address=bill_doc.address,
         payer=bill_doc.payer,
@@ -115,6 +123,7 @@ def save_comparison(
     report: ComparisonReport,
     prev_bill: Optional[BillDocument],
     curr_bill: Optional[BillDocument],
+    user_id: Optional[str] = None,
 ) -> Comparison:
     """Persist a factor-analysis report and its anomalies.
 
@@ -122,9 +131,9 @@ def save_comparison(
     remains self-contained. Re-saving the same ``comparison_id`` is a no-op.
     """
     if prev_bill is not None:
-        save_bill(db, prev_bill)
+        save_bill(db, prev_bill, user_id=user_id)
     if curr_bill is not None:
-        save_bill(db, curr_bill)
+        save_bill(db, curr_bill, user_id=user_id)
 
     existing = (
         db.query(Comparison)
@@ -132,10 +141,15 @@ def save_comparison(
         .first()
     )
     if existing is not None:
+        if user_id and not existing.user_id:
+            existing.user_id = user_id
+            db.commit()
+            db.refresh(existing)
         return existing
 
     comparison = Comparison(
         comparison_id=report.comparison_id,
+        user_id=user_id,
         prev_bill_id=prev_bill.bill_id if prev_bill else None,
         curr_bill_id=curr_bill.bill_id if curr_bill else None,
         delta_abs=_dec(report.summary.delta_abs),
@@ -202,5 +216,73 @@ def get_chat_history(db: Session, comparison_id: str) -> List[ChatMessage]:
         db.query(ChatMessage)
         .filter(ChatMessage.comparison_id == comparison_id)
         .order_by(ChatMessage.id.asc())
+        .all()
+    )
+
+
+# =============================================================================
+# User operations
+# =============================================================================
+
+def get_user_by_id(db: Session, id: int) -> Optional[User]:
+    """Return a user by primary key ID (or None)."""
+    return db.query(User).filter(User.id == id).first()
+
+
+def get_user_by_user_id(db: Session, user_id: str) -> Optional[User]:
+    """Return a user by unique user_id (or None)."""
+    return db.query(User).filter(User.user_id == user_id).first()
+
+
+def get_user_by_email(db: Session, email: str) -> Optional[User]:
+    """Return a user by email address (case-insensitive lookup, or None)."""
+    return db.query(User).filter(User.email == email.strip().lower()).first()
+
+
+def get_user_by_username(db: Session, username: str) -> Optional[User]:
+    """Return a user by username (or None)."""
+    return db.query(User).filter(User.username == username.strip()).first()
+
+
+def create_user(
+    db: Session,
+    username: str,
+    email: str,
+    password: str,
+    user_id: Optional[str] = None,
+) -> User:
+    """Create and persist a new user account with hashed password."""
+    if not user_id:
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+
+    hashed = hash_password(password)
+    user = User(
+        user_id=user_id,
+        username=username.strip(),
+        email=email.strip().lower(),
+        hashed_password=hashed,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def get_user_bills(db: Session, user_id: str) -> List[Bill]:
+    """Return all receipts associated with a specific user, newest first."""
+    return (
+        db.query(Bill)
+        .filter(Bill.user_id == user_id)
+        .order_by(Bill.created_at.desc())
+        .all()
+    )
+
+
+def get_user_comparisons(db: Session, user_id: str) -> List[Comparison]:
+    """Return all comparison reports associated with a specific user, newest first."""
+    return (
+        db.query(Comparison)
+        .filter(Comparison.user_id == user_id)
+        .order_by(Comparison.created_at.desc())
         .all()
     )

@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from app.api import cases, chat, compare
+from app.api import auth, cases, chat, compare
 from app.core.config import settings
 from app.core.logging import logger
 from app.core.rate_limit import limiter
@@ -41,6 +41,10 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
     openapi_tags=[
+        {
+            "name": "auth",
+            "description": "Аутентификация пользователей, регистрация и получение профиля.",
+        },
         {
             "name": "cases",
             "description": "Демо-кейсы для Владивостока — готовые наборы квитанций для демонстрации возможностей сервиса.",
@@ -121,6 +125,7 @@ async def add_security_headers(request, call_next):
     return response
 
 API_PREFIX = "/api/v1"
+app.include_router(auth.router, prefix=API_PREFIX + "/auth", tags=["auth"])
 app.include_router(cases.router, prefix=API_PREFIX, tags=["cases"])
 app.include_router(compare.router, prefix=API_PREFIX, tags=["compare"])
 app.include_router(chat.router, prefix=API_PREFIX, tags=["chat"])

@@ -52,7 +52,23 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db() -> None:
-    """Create all tables if they do not exist yet (dev/test convenience)."""
-    from app.db import models  # noqa: F401  (register models on Base.metadata)
+    """Create all tables if they do not exist yet and seed the default demo user."""
+    from app.db import crud, models  # noqa: F401  (register models on Base.metadata)
 
     Base.metadata.create_all(bind=engine)
+
+    session = SessionLocal()
+    try:
+        demo = crud.get_user_by_email(session, "demo@utilitylens.ru")
+        if demo is None:
+            crud.create_user(
+                session,
+                username="demo",
+                email="demo@utilitylens.ru",
+                password="demo123",
+                user_id="user_demo_01",
+            )
+    except Exception:
+        session.rollback()
+    finally:
+        session.close()

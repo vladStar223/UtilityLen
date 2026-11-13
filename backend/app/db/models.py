@@ -25,6 +25,22 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.database import Base
 
 
+class User(Base):
+    """A registered user account."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    username: Mapped[str] = mapped_column(String, unique=True, index=True)
+    email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    bills: Mapped[List["Bill"]] = relationship(back_populates="user")
+    comparisons: Mapped[List["Comparison"]] = relationship(back_populates="user")
+
+
 class Bill(Base):
     """A single utility receipt (квитанция)."""
 
@@ -32,6 +48,11 @@ class Bill(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     bill_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    user_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.user_id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     period: Mapped[str] = mapped_column(String)
     address: Mapped[str] = mapped_column(String)
     payer: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -51,6 +72,7 @@ class Bill(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    user: Mapped[Optional["User"]] = relationship(back_populates="bills")
 
 
 class BillService(Base):
@@ -100,6 +122,11 @@ class Comparison(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     comparison_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    user_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.user_id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     prev_bill_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     curr_bill_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     delta_abs: Mapped[Decimal] = mapped_column(Numeric(10, 2))
@@ -119,6 +146,7 @@ class Comparison(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    user: Mapped[Optional["User"]] = relationship(back_populates="comparisons")
 
 
 class ComparisonAnomaly(Base):
