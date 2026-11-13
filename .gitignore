@@ -37,3 +37,5 @@ PROMPT*.md
 *.swo
 .DS_Store
 Thumbs.db
+
+*.db

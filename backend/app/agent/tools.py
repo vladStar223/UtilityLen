@@ -9,6 +9,7 @@ import json
 import re
 from datetime import date
 from pathlib import Path
+from string import Template
 from typing import Any, Dict, List, Optional
 
 from app.core import cache
@@ -99,18 +100,59 @@ def _template_field_names(template: str) -> List[str]:
     return re.findall(r"\{([A-Za-z_][A-Za-z0-9_]*)(?::[^}]*)?\}", template)
 
 
+_TEMPLATE_FIELD_RE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)(?::([^}]*))?\}")
+
+
+def safe_render_template(template_str: str, values: Dict[str, Any]) -> str:
+    """Render ``{field}`` / ``{field:spec}`` placeholders without ``str.format``.
+
+    ``str.format`` evaluates arbitrary attribute/index chains (``{0.__class__}``,
+    ``{0[0]}``), which is a template-injection risk.  Here only a strict
+    identifier pattern is matched, the optional format spec is applied
+    explicitly, and any leftover brace tokens are stripped rather than
+    evaluated.
+    """
+    def _resolve(match: re.Match) -> str:
+        name = match.group(1)
+        spec = match.group(2)
+        value = values.get(name, "")
+        if spec:
+            try:
+                return format(value, spec)
+            except (ValueError, TypeError):
+                return str(value)
+        return str(value)
+
+    rendered = _TEMPLATE_FIELD_RE.sub(_resolve, template_str)
+
+    # string.Template resolves any genuine ``$field`` tokens already present in
+    # the source template without ever evaluating code.
+    rendered = Template(rendered).safe_substitute(
+        {k: str(v) for k, v in values.items()}
+    )
+
+    # Strip any brace-style tokens we did not recognise (e.g. ``{0[0]}`` or
+    # ``{__class__}``) so they can never reach a ``.format`` call.
+    rendered = re.sub(r"\{[^{}]*\}", "", rendered)
+    return rendered
+
+
 def store_comparison(
     comparison_id: str,
     report: ComparisonReport,
     curr_bill: BillDocument,
     prev_bill: BillDocument,
+    owner_id: Optional[str] = None,
 ) -> None:
     """Register a computed report for later claim drafting.
 
     The record is serialized to JSON and cached under
     ``comparison:{comparison_id}`` (Redis with an in-memory fallback).
+    ``owner_id`` records the subject that created the report so that later
+    reads can be scoped to that owner.
     """
     data = {
+        "owner_id": owner_id,
         "report": report.model_dump(mode="json"),
         "curr_bill": curr_bill.model_dump(mode="json"),
         "prev_bill": prev_bill.model_dump(mode="json"),
@@ -118,11 +160,22 @@ def store_comparison(
     cache.set_report(comparison_id, data)
 
 
-def get_report(comparison_id: str) -> Optional[Dict[str, Any]]:
-    """Return a stored report record, rehydrating the Pydantic models."""
+def get_report(
+    comparison_id: str,
+    owner_id: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Return a stored report record, rehydrating the Pydantic models.
+
+    When the record carries an ``owner_id`` and a caller supplies its own
+    ``owner_id`` that does not match, ``PermissionError`` is raised so the
+    API layer can answer 403 Forbidden.
+    """
     data = cache.get_report(comparison_id)
     if data is None:
         return None
+    stored_owner = data.get("owner_id")
+    if stored_owner is not None and owner_id is not None and stored_owner != owner_id:
+        raise PermissionError(f"Comparison '{comparison_id}' belongs to another owner")
     return {
         "report": ComparisonReport.model_validate(data["report"]),
         "curr_bill": BillDocument.model_validate(data["curr_bill"]),
@@ -180,9 +233,7 @@ def draft_uk_claim(comparison_id: str, anomaly_code: str) -> Optional[Dict[str, 
     }
 
     template_text = template_entry.get("template", "")
-    fields = _template_field_names(template_text)
-    values = {f: context.get(f, "") for f in fields}
-    text = template_text.format(**values)
+    text = safe_render_template(template_text, context)
 
     return {
         "title": template_entry.get("title", ""),

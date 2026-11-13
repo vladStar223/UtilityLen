@@ -10,8 +10,11 @@ autonomously without any external PostgreSQL / Redis instance:
 """
 
 import os
+import re
 from typing import List
 from dotenv import load_dotenv
+
+from app.core.logging import logger
 
 load_dotenv()
 
@@ -41,6 +44,23 @@ class Settings:
             origin.strip() for origin in raw_cors.split(",") if origin.strip()
         ]
 
+        # In production every origin must be served over HTTPS. Localhost is
+        # allowed only for development tooling; everything else must be secure.
+        if self.ENVIRONMENT == "production":
+            localhost_prefixes = (
+                "http://localhost",
+                "https://localhost",
+                "http://127.0.0.1",
+                "https://127.0.0.1",
+            )
+            for origin in self.CORS_ORIGINS:
+                if not origin.startswith("https://") and not origin.startswith(
+                    localhost_prefixes
+                ):
+                    raise ValueError(
+                        f"Non-HTTPS CORS origin '{origin}' is not allowed in production"
+                    )
+
         # LLM / GPTunnel
         self.GPTUNNEL_API_KEY: str = os.getenv("GPTUNNEL_API_KEY", "")
         self.GPTUNNEL_BASE_URL: str = os.getenv(
@@ -51,6 +71,28 @@ class Settings:
             "LLM_MODEL",
             "gptunnel/deepseek-v4-pro-tunnelcode",
         )
+
+        # API authentication (MVP). Empty string disables the check.
+        self.API_KEY: str = os.getenv("API_KEY", "")
+
+        if self.ENVIRONMENT == "production":
+            self._validate_production_database()
+
+    def _validate_production_database(self) -> None:
+        """Refuse to run production with an insecure database configuration.
+
+        SQLite is not suitable for production, and default/weak passwords
+        (``postgres``, ``password``, ``admin``, ...) must never be shipped in
+        a real deployment. Failing fast here prevents a misconfigured release.
+        """
+        if self.DATABASE_URL.startswith("sqlite"):
+            raise ValueError(
+                "SQLite is not allowed in production; configure DATABASE_URL to a PostgreSQL instance"
+            )
+        if re.search(r":(postgres|password|admin|123456|changeme|qwerty)@", self.DATABASE_URL):
+            logger.warning(
+                "DATABASE_URL contains a default/weak password; replace it with a strong secret"
+            )
 
 
 settings = Settings()

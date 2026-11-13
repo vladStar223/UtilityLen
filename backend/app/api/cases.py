@@ -3,11 +3,12 @@
 import json
 from typing import List
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app import CASES_DIR
+from app.core.security import verify_api_key
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
 def _list_cases() -> List[dict]:

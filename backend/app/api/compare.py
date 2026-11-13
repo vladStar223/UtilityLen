@@ -2,24 +2,28 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app import CASES_DIR
 from app.agent.tools import store_comparison
 from app.core.analyzer import analyze
+from app.core.logging import logger
 from app.core.models import BillDocument, ComparisonReport
+from app.core.rate_limit import limiter
+from app.core.security import verify_api_key
 from app.db import crud
 from app.db.database import get_db
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
 class CompareRequest(BaseModel):
     case_id: Optional[str] = Field(
         default=None,
-        description="ID демо-кейса (альтернатива загрузке квитанций)",
+        pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$",
+        description="Идентификатор эталонного кейса (только a-z, 0-9, _, -)",
         examples=["vladivostok-lenina-10"],
     )
     prev_bill: Optional[BillDocument] = Field(
@@ -33,8 +37,9 @@ class CompareRequest(BaseModel):
 
 
 def _load_case_bills(case_id: str):
-    case_dir = CASES_DIR / case_id
-    if not case_dir.is_dir():
+    base_dir = CASES_DIR.resolve()
+    case_dir = (CASES_DIR / case_id).resolve()
+    if not case_dir.is_relative_to(base_dir) or not case_dir.is_dir():
         raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
 
     prev_path = case_dir / "prev_bill.json"
@@ -157,11 +162,16 @@ def _load_case_bills(case_id: str):
         }
     },
 )
-def compare(request: CompareRequest, db: Session = Depends(get_db)) -> ComparisonReport:
-    if request.case_id:
-        prev_bill, curr_bill = _load_case_bills(request.case_id)
-    elif request.prev_bill is not None and request.curr_bill is not None:
-        prev_bill, curr_bill = request.prev_bill, request.curr_bill
+@limiter.limit("30/minute")
+def compare(
+    request: Request,
+    payload: CompareRequest,
+    db: Session = Depends(get_db),
+) -> ComparisonReport:
+    if payload.case_id:
+        prev_bill, curr_bill = _load_case_bills(payload.case_id)
+    elif payload.prev_bill is not None and payload.curr_bill is not None:
+        prev_bill, curr_bill = payload.prev_bill, payload.curr_bill
     else:
         raise HTTPException(
             status_code=400,
@@ -173,7 +183,8 @@ def compare(request: CompareRequest, db: Session = Depends(get_db)) -> Compariso
 
     try:
         crud.save_comparison(db, report, prev_bill, curr_bill)
-    except Exception:
+    except Exception as exc:
         db.rollback()
+        logger.exception(f"Database error in operation: {exc.__class__.__name__}")
 
     return report

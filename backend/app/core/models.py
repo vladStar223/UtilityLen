@@ -22,7 +22,7 @@ Money = Annotated[float, AfterValidator(_round_money)]
 
 class ServiceLine(BaseModel):
     service_code: str = Field(description="Код услуги (например, 'cold_water', 'heating')", examples=["cold_water", "heating", "electricity"])
-    raw_name: str = Field(description="Исходное название услуги из квитанции", examples=["Холодное водоснабжение", "Отопление"])
+    raw_name: str = Field(description="Исходное название услуги из квитанции", examples=["Холодное водоснабжение", "Отопление"], max_length=500)
     unit: str = Field(description="Единица измерения услуги", examples=["м3", "Гкал", "кВт·ч"])
     volume: float = Field(description="Объём потребления за период", examples=[12.5, 1.8, 250.0])
     tariff: Money = Field(description="Тариф за единицу, руб.", examples=[45.50, 2150.00, 5.20])
@@ -43,13 +43,13 @@ class MeterReading(BaseModel):
 class BillDocument(BaseModel):
     bill_id: str = Field(description="Уникальный идентификатор квитанции", examples=["bill-2024-01-001"])
     period: str = Field(description="Расчётный период (YYYY-MM)", examples=["2024-01", "2024-02"])
-    address: str = Field(description="Адрес объекта", examples=["г. Владивосток, ул. Ленина, д. 10, кв. 25"])
+    address: str = Field(description="Адрес объекта", examples=["г. Владивосток, ул. Ленина, д. 10, кв. 25"], max_length=500)
     payer: Optional[str] = Field(default=None, description="ФИО плательщика", examples=["Иванов Иван Иванович"])
     total_amount: Money = Field(description="Общая сумма к оплате, руб.", examples=[4520.75, 6800.00])
     qr_data: Optional[str] = Field(default=None, description="Данные QR-кода квитанции", examples=["01;1234567890;..."])
     qr_sum_rub: Optional[Money] = Field(default=None, description="Сумма из QR-кода, руб.", examples=[4520.75])
     meters: Optional[List[MeterReading]] = Field(default_factory=list, description="Показания приборов учёта")
-    services: List[ServiceLine] = Field(description="Список услуг в квитанции")
+    services: List[ServiceLine] = Field(description="Список услуг в квитанции", max_length=200)
 
 
 class SummaryReport(BaseModel):
@@ -81,7 +81,7 @@ class AnomalyItem(BaseModel):
 
 class ServiceItem(BaseModel):
     category: str = Field(description="Категория услуги", examples=["water", "heating", "electricity", "maintenance"])
-    display_name: str = Field(description="Отображаемое название услуги", examples=["Холодное водоснабжение", "Отопление"])
+    display_name: str = Field(description="Отображаемое название услуги", examples=["Холодное водоснабжение", "Отопление"], max_length=500)
     unit: str = Field(description="Единица измерения", examples=["м3", "Гкал", "кВт·ч"])
     prev_volume: float = Field(description="Объём за предыдущий период", examples=[10.5, 1.5])
     curr_volume: float = Field(description="Объём за текущий период", examples=[12.5, 1.8])
