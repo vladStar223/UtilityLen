@@ -2,7 +2,7 @@
 import streamlit as st
 
 
-def apply_styles(is_dark: bool = False) -> None:
+def apply_styles(is_dark: bool = False, *args, **kwargs) -> None:
     """Inject unified clean light glassmorphism styles with high contrast."""
     css = """
 <style>
