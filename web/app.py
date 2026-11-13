@@ -7,6 +7,7 @@ from components.anomalies import render_anomalies
 from components.chat import render_chat_view
 from components.kpi_cards import render_kpi_cards
 from components.sidebar import render_sidebar
+from components.table_view import render_items_table
 from components.trends_view import render_trends_view
 from components.upload_view import render_upload_view
 from styles import apply_styles
@@ -53,6 +54,9 @@ elif screen == "analysis":
 
     # 3. Red Flag Anomalies
     render_anomalies(result.get("anomalies", []))
+
+    # 4. Detailed items table (Было / Стало)
+    render_items_table(result.get("items", []))
 
 elif screen == "trends":
     render_trends_view()

@@ -31,82 +31,157 @@ def render_trends_view() -> None:
 
     st.divider()
 
-    # --- Data ---
-    months = ["Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь"]
-
-    data = {
-        "🔥 Отопление": {
-            "values": [800, 800, 800, 1200, 3640, 4223],
-            "color": "#f59e0b",
-        },
-        "💧 Холодная вода (ХВС)": {
-            "values": [310, 310, 315, 320, 324, 735.54],
-            "color": "#0284c7" if not is_dark else "#38bdf8",
-        },
-        "♨️ Горячая вода (ГВС)": {
-            "values": [950, 1035, 1035, 1040, 1040, 1094],
-            "color": "#e11d48" if not is_dark else "#fb7185",
-        },
-        "⚡ Электричество": {
-            "values": [1180, 1190, 1220, 1190, 1210, 1240],
-            "color": "#059669" if not is_dark else "#34d399",
-        },
-    }
-
-    # --- Filter ---
-    selected = st.multiselect(
-        "Выберите категории для отображения на графике:",
-        list(data.keys()),
-        default=list(data.keys()),
-        key="trends_filter",
+    # --- Tabs ---
+    tab_trends, tab_waterfall = st.tabs(
+        ["📈 Динамика тарифов (Мульти-линии)", "📊 Факторный водопад (Waterfall)"]
     )
 
-    # --- Plotly Chart ---
-    fig = go.Figure()
+    with tab_trends:
+        # --- Data ---
+        months = ["Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь"]
 
-    for category in selected:
-        entry = data[category]
-        fig.add_trace(
-            go.Scatter(
-                x=months,
-                y=entry["values"],
-                name=category,
-                mode="lines+markers",
-                line=dict(width=3, color=entry["color"]),
-                marker=dict(size=8, color=entry["color"]),
-                hovertemplate="%{y:,.2f} ₽<extra>" + category + "</extra>",
+        data = {
+            "🔥 Отопление": {
+                "values": [800, 800, 800, 1200, 3640, 4223],
+                "color": "#f59e0b",
+            },
+            "💧 Холодная вода (ХВС)": {
+                "values": [310, 310, 315, 320, 324, 735.54],
+                "color": "#0284c7" if not is_dark else "#38bdf8",
+            },
+            "♨️ Горячая вода (ГВС)": {
+                "values": [950, 1035, 1035, 1040, 1040, 1094],
+                "color": "#e11d48" if not is_dark else "#fb7185",
+            },
+            "⚡ Электричество": {
+                "values": [1180, 1190, 1220, 1190, 1210, 1240],
+                "color": "#059669" if not is_dark else "#34d399",
+            },
+        }
+
+        # --- Filter ---
+        selected = st.multiselect(
+            "Выберите категории для отображения на графике:",
+            list(data.keys()),
+            default=list(data.keys()),
+            key="trends_filter",
+        )
+
+        # --- Plotly Chart ---
+        fig = go.Figure()
+
+        for category in selected:
+            entry = data[category]
+            fig.add_trace(
+                go.Scatter(
+                    x=months,
+                    y=entry["values"],
+                    name=category,
+                    mode="lines+markers",
+                    line=dict(width=3, color=entry["color"]),
+                    marker=dict(size=8, color=entry["color"]),
+                    hovertemplate="%{y:,.2f} ₽<extra>" + category + "</extra>",
+                )
+            )
+
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="Inter, Open Sans, sans-serif", color=text_color),
+            hovermode="x unified",
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="left",
+                x=0,
+                font=dict(size=13, color=text_color),
+            ),
+            margin=dict(l=40, r=40, t=20, b=40),
+            xaxis=dict(
+                gridcolor=grid_color,
+                linecolor=grid_color,
+                tickfont=dict(size=13, color=text_color),
+            ),
+            yaxis=dict(
+                gridcolor=grid_color,
+                linecolor=grid_color,
+                tickformat=",.0f",
+                ticksuffix=" ₽",
+                tickfont=dict(size=13, color=text_color),
+            ),
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+    with tab_waterfall:
+        # --- Extract data from session state ---
+        analysis_result = st.session_state.get("analysis_result", {}) or {}
+        summary = analysis_result.get("summary", {})
+        factors = analysis_result.get("factor_breakdown", {})
+
+        prev_total = summary.get("prev_total", 5420.0)
+        curr_total = summary.get("curr_total", 6890.5)
+        tar_eff = factors.get("tariff_effect_rub", 180.0)
+        vol_eff = factors.get("volume_effect_rub", 940.5)
+        recalc_eff = (
+            factors.get("recalculation_effect_rub", 350.0)
+            + factors.get("new_services_effect_rub", 0.0)
+        )
+
+        # --- Waterfall chart ---
+        fig_waterfall = go.Figure(
+            go.Waterfall(
+                name="Факторы",
+                orientation="v",
+                measure=["relative", "relative", "relative", "relative", "total"],
+                x=[
+                    "Счет прошлого мес.",
+                    "Рост тарифов",
+                    "Рост объема",
+                    "Штрафы/Перерасчеты",
+                    "Итог к оплате",
+                ],
+                textposition="outside",
+                text=[
+                    f"{prev_total:,.0f} ₽",
+                    f"+{tar_eff:,.0f} ₽",
+                    f"+{vol_eff:,.0f} ₽",
+                    f"+{recalc_eff:,.0f} ₽",
+                    f"{curr_total:,.0f} ₽",
+                ],
+                y=[prev_total, tar_eff, vol_eff, recalc_eff, curr_total],
+                connector={"line": {"color": "rgba(148, 163, 184, 0.5)"}},
+                increasing={"marker": {"color": "#fb7185"}},
+                decreasing={"marker": {"color": "#34d399"}},
+                totals={"marker": {"color": "#7c3aed"}},
             )
         )
 
-    fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, Open Sans, sans-serif", color=text_color),
-        hovermode="x unified",
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="left",
-            x=0,
-            font=dict(size=13, color=text_color),
-        ),
-        margin=dict(l=40, r=40, t=20, b=40),
-        xaxis=dict(
-            gridcolor=grid_color,
-            linecolor=grid_color,
-            tickfont=dict(size=13, color=text_color),
-        ),
-        yaxis=dict(
-            gridcolor=grid_color,
-            linecolor=grid_color,
-            tickformat=",.0f",
-            ticksuffix=" ₽",
-            tickfont=dict(size=13, color=text_color),
-        ),
-    )
+        fig_waterfall.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="Open Sans, Inter, sans-serif", color=text_color),
+            margin=dict(l=40, r=40, t=40, b=40),
+            xaxis=dict(
+                gridcolor=grid_color,
+                linecolor=grid_color,
+                tickfont=dict(size=13, color=text_color),
+            ),
+            yaxis=dict(
+                gridcolor=grid_color,
+                linecolor=grid_color,
+                tickformat=",.0f",
+                ticksuffix=" ₽",
+                tickfont=dict(size=13, color=text_color),
+            ),
+        )
 
-    st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig_waterfall, use_container_width=True)
+        st.caption(
+            "Диаграмма декомпозирует общую переплату на математические составляющие"
+            " без участия LLM."
+        )
 
     # --- Trend Cards ---
     st.markdown("### Ключевые тренды")

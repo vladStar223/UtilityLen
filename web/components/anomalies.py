@@ -12,7 +12,7 @@ def render_anomalies(anomalies: list):
 
     is_dark = st.session_state.get("theme_dark", False)
 
-    for a in anomalies:
+    for idx, a in enumerate(anomalies):
         sev = a.get("severity", "yellow")
         is_red = sev == "red"
         icon = "🔴" if is_red else "🟡"
@@ -33,7 +33,10 @@ def render_anomalies(anomalies: list):
             hint_color = "#475569"
             impact_color = "#be123c" if is_red else "#854d0e"
 
-        card_html = f"""
+        col_text, col_btn = st.columns([4, 1.2])
+
+        with col_text:
+            card_html = f"""
 <div style="
     background: {bg_color};
     border: 1.5px solid {border_color};
@@ -65,4 +68,18 @@ def render_anomalies(anomalies: list):
     </div>
 </div>
 """
-        st.markdown(card_html, unsafe_allow_html=True)
+            st.markdown(card_html, unsafe_allow_html=True)
+
+        with col_btn:
+            if st.button(
+                "⚖️ Оспорить с юристом",
+                key=f"dispute_btn_{idx}",
+                use_container_width=True,
+            ):
+                st.session_state["active_screen"] = "chat"
+                st.session_state["pending_prompt"] = (
+                    f"Законно ли начисление: {a.get('title')} "
+                    f"на сумму {a.get('impact_rub', 0):,.2f} ₽? "
+                    f"Подготовь текст претензии в УК."
+                )
+                st.rerun()

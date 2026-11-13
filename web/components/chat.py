@@ -78,6 +78,13 @@ def render_chat_view(client) -> None:
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
 
+    # --- Handle pending_prompt injected from other screens ---
+    if (
+        "pending_prompt" in st.session_state
+        and st.session_state["pending_prompt"]
+    ):
+        triggered_prompt = st.session_state.pop("pending_prompt")
+
     # --- Handle quick-chip or text input ---
     user_input = st.chat_input("Задайте вопрос юристу...")
     prompt: str | None = triggered_prompt or (user_input if user_input else None)
