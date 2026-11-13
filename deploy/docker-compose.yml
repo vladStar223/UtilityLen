@@ -1,21 +1,52 @@
-version: '3.8'
-
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=utilitylens
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d utilitylens"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
   backend:
     build:
-      context: ./backend
+      context: ../backend
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
     environment:
       - PORT=8000
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/utilitylens
+      - REDIS_URL=redis://redis:6379/0
     volumes:
-      - ./contracts:/app/contracts:ro
-      - ./data:/app/data:ro
+      - ../contracts:/contracts:ro
+      - ../data:/data:ro
+      - ../docs:/docs:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   web:
+    profiles: ["frontend", "full"]
     build:
-      context: ./web
+      context: ../web
       dockerfile: Dockerfile
     ports:
       - "8501:8501"
@@ -24,3 +55,7 @@ services:
       - API_BASE_URL=http://backend:8000
     depends_on:
       - backend
+
+volumes:
+  postgres_data:
+  redis_data:
