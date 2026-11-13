@@ -1,11 +1,13 @@
 """CRUD operations mapping the Pydantic domain models to the ORM tables."""
 
+import re
 from datetime import date
 from decimal import Decimal
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
+from app.core.logging import logger
 from app.core.models import BillDocument, ComparisonReport
 from app.db.models import (
     Bill,
@@ -23,6 +25,20 @@ def _dec(value: Optional[float], default: str = "0") -> Decimal:
     if value is None:
         return Decimal(default)
     return Decimal(str(value))
+
+
+_PERSONAL_ACC_RE = re.compile(r"(PersonalAcc=\d{4})\d+(\d{4})")
+
+
+def mask_qr_personal_data(qr_raw: str) -> str:
+    """Mask the ``PersonalAcc`` (личный счёт) inside a ГОСТ Р 56042-2014 QR string.
+
+    Per 152-ФЗ the personal account number is personal data: only the first
+    four and last four digits are kept, the middle is replaced with ``****``.
+    """
+    if not qr_raw:
+        return qr_raw
+    return _PERSONAL_ACC_RE.sub(r"\1****\2", qr_raw)
 
 
 def save_bill(db: Session, bill_doc: BillDocument) -> Bill:
@@ -46,7 +62,9 @@ def save_bill(db: Session, bill_doc: BillDocument) -> Bill:
         address=bill_doc.address,
         payer=bill_doc.payer,
         total_amount=_dec(bill_doc.total_amount),
-        qr_data=bill_doc.qr_data,
+        qr_data=mask_qr_personal_data(bill_doc.qr_data)
+        if bill_doc.qr_data
+        else None,
         qr_sum_rub=_dec(qr_sum) if qr_sum is not None else None,
         qr_verified=qr_verified,
     )

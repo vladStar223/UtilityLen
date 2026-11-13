@@ -2,16 +2,20 @@
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.agent import tools
 from app.agent.runner import generate_stream
+from app.core.logging import logger
+from app.core.rate_limit import limiter
+from app.core.security import verify_api_key
 from app.db import crud
 from app.db.database import get_db
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 
 class ChatRequest(BaseModel):
@@ -22,11 +26,13 @@ class ChatRequest(BaseModel):
     message: str = Field(
         description="Сообщение пользователя для AI-юриста",
         examples=["Почему выросла сумма за отопление?", "Можно ли оспорить этот тариф?"],
+        max_length=2000,
     )
     history: Optional[List[dict]] = Field(
         default=None,
         description="История диалога (опционально, для поддержания контекста)",
         examples=[[{"role": "user", "content": "Привет"}, {"role": "assistant", "content": "Здравствуйте!"}]],
+        max_length=50,
     )
 
 
@@ -98,19 +104,39 @@ class ChatRequest(BaseModel):
         }
     },
 )
-def chat_stream(request: ChatRequest, db: Session = Depends(get_db)) -> StreamingResponse:
+@limiter.limit("20/minute")
+def chat_stream(
+    request: Request,
+    payload: ChatRequest,
+    owner_id: str = Depends(verify_api_key),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    try:
+        record = tools.get_report(payload.comparison_id, owner_id)
+    except PermissionError:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Access to comparison '{payload.comparison_id}' is forbidden",
+        )
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Comparison '{payload.comparison_id}' not found",
+        )
+
     try:
         crud.save_chat_message(
             db,
-            comparison_id=request.comparison_id,
+            comparison_id=payload.comparison_id,
             role="user",
-            content=request.message,
+            content=payload.message,
         )
-    except Exception:
+    except Exception as exc:
         db.rollback()
+        logger.exception(f"Database error in operation: {exc.__class__.__name__}")
 
     return StreamingResponse(
-        generate_stream(request.comparison_id, request.message, request.history),
+        generate_stream(payload.comparison_id, payload.message, payload.history, owner_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )

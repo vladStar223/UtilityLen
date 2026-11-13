@@ -1,5 +1,6 @@
 """Tests for the SQLAlchemy models and CRUD helpers against SQLite."""
 
+import re
 from decimal import Decimal
 from pathlib import Path
 
@@ -77,6 +78,31 @@ def test_save_bill_is_idempotent(db):
     assert db.query(models.Bill).count() == 1
 
 
+def test_mask_qr_personal_data():
+    raw = (
+        "ST00012|Name=ООО УК Уютный Дом|PersonalAcc=40702810100000001234"
+        "|BankName=ПАО СБЕРБАНК|CorrespAcc=30101810400000000225|Sum=542000"
+    )
+    masked = crud.mask_qr_personal_data(raw)
+
+    assert "PersonalAcc=4070****1234" in masked
+    assert "40702810100000001234" not in masked
+    # CorrespAcc is not personal data and must remain untouched.
+    assert "CorrespAcc=30101810400000000225" in masked
+
+
+def test_save_bill_masks_qr_personal_acc(db):
+    prev, _ = _load_case()
+    assert prev.qr_data is not None
+    assert "PersonalAcc=40702810100000001234" in prev.qr_data
+
+    saved = crud.save_bill(db, prev)
+
+    assert saved.qr_data is not None
+    assert "PersonalAcc=40702810100000001234" not in saved.qr_data
+    assert "PersonalAcc=4070****1234" in saved.qr_data
+
+
 def test_get_bill_missing_returns_none(db):
     assert crud.get_bill(db, "bill_unknown") is None
 
@@ -89,7 +115,7 @@ def test_save_and_get_comparison(db):
     saved = crud.get_comparison(db, report.comparison_id)
 
     assert saved is not None
-    assert saved.comparison_id == "cmp_2026_10_11"
+    assert re.fullmatch(r"cmp-[0-9a-f]{32}", saved.comparison_id)
     assert float(saved.delta_abs) == 1470.50
     assert float(saved.delta_pct) == 27.13
     assert saved.status_level == "red"

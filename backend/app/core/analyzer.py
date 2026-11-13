@@ -13,6 +13,7 @@ The three effects always sum to the line delta ``S2 - S1``, and the sum of
 all line deltas converges to the receipt total delta to the kopeck.
 """
 
+import uuid
 from datetime import date, datetime, timedelta
 from typing import Dict, List
 
@@ -69,9 +70,7 @@ def _line_code(line: ServiceLine) -> str:
 
 
 def _build_comparison_id(prev_bill: BillDocument, curr_bill: BillDocument) -> str:
-    prev_month = (prev_bill.period or "").split("-")[-1]
-    curr_year, curr_month = (curr_bill.period or "--").split("-")[:2]
-    return f"cmp_{curr_year}_{prev_month}_{curr_month}"
+    return f"cmp-{uuid.uuid4().hex}"
 
 
 def _status_level(items: List[ServiceItem], anomalies: List[AnomalyItem]) -> str:
