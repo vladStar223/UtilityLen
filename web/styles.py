@@ -3,23 +3,29 @@ import streamlit as st
 
 
 def apply_styles(is_dark: bool = False, *args, **kwargs) -> None:
-    """Inject glassmorphism styles with high contrast for both themes."""
+    """Inject glassmorphism styles with high contrast and pixel-perfect theme support."""
     if is_dark:
         app_bg = "radial-gradient(circle at 15% 15%, #2e2640 0%, #171520 50%, #0d0c14 100%)"
         text_color = "#f8fafc"
         text_muted = "#94a3b8"
         glass_bg = "rgba(255, 255, 255, 0.06)"
         glass_border = "rgba(255, 255, 255, 0.14)"
-        glass_shadow = "0 15px 35px rgba(0,0,0,0.4)"
-        sidebar_bg = "rgba(23, 21, 32, 0.95)"
-        expander_bg = "rgba(255, 255, 255, 0.05)"
+        glass_shadow = "0 15px 35px rgba(0,0,0,0.45)"
+        sidebar_bg = "rgba(23, 21, 32, 0.96)"
+        expander_bg = "rgba(255, 255, 255, 0.04)"
         button_bg = "rgba(196, 181, 253, 0.12)"
         button_border = "rgba(196, 181, 253, 0.35)"
         button_text = "#ede9fe"
         accent_strong = "#7c3aed"
         accent = "#a78bfa"
-        input_bg = "rgba(30, 27, 43, 0.85)"
+        input_bg = "rgba(30, 27, 43, 0.9)"
         chat_bg = "rgba(255, 255, 255, 0.06)"
+        alert_qr_bg = "rgba(6, 78, 59, 0.45)"
+        alert_qr_border = "rgba(16, 185, 129, 0.4)"
+        alert_qr_text = "#6ee7b7"
+        delta_pill_bg = "rgba(255, 255, 255, 0.08)"
+        delta_pill_border = "rgba(255, 255, 255, 0.15)"
+        delta_pill_text = "#fda4af"
     else:
         app_bg = "radial-gradient(circle at 10% 10%, #ede9fe 0%, #f8fafc 50%, #f1f5f9 100%)"
         text_color = "#0f172a"
@@ -27,7 +33,7 @@ def apply_styles(is_dark: bool = False, *args, **kwargs) -> None:
         glass_bg = "#ffffff"
         glass_border = "#e2e8f0"
         glass_shadow = "0 4px 20px rgba(0, 0, 0, 0.04)"
-        sidebar_bg = "rgba(255, 255, 255, 0.94)"
+        sidebar_bg = "rgba(255, 255, 255, 0.96)"
         expander_bg = "#ffffff"
         button_bg = "#ffffff"
         button_border = "#e2e8f0"
@@ -36,6 +42,12 @@ def apply_styles(is_dark: bool = False, *args, **kwargs) -> None:
         accent = "#8b5cf6"
         input_bg = "#ffffff"
         chat_bg = "#ffffff"
+        alert_qr_bg = "#ecfdf5"
+        alert_qr_border = "#a7f3d0"
+        alert_qr_text = "#065f46"
+        delta_pill_bg = "rgba(0, 0, 0, 0.04)"
+        delta_pill_border = "rgba(0, 0, 0, 0.08)"
+        delta_pill_text = "#be123c"
 
     css = """
 <style>
@@ -90,7 +102,7 @@ section.main {
 }
 
 [data-testid="stSidebar"] [data-testid="stExpander"] summary {
-    background: __EXPANDER_BG__ !important;
+    background: transparent !important;
     color: __TEXT_COLOR__ !important;
     font-weight: 700 !important;
     border-radius: 14px !important;
@@ -102,7 +114,7 @@ section.main {
 }
 
 [data-testid="stSidebar"] [data-testid="stExpander"] div[data-testid="stExpanderDetails"] {
-    background: __EXPANDER_BG__ !important;
+    background: transparent !important;
     padding: 0.5rem 0.8rem 0.8rem 0.8rem !important;
 }
 
@@ -161,6 +173,20 @@ div[data-testid="stMetric"],
     color: __TEXT_COLOR__ !important;
 }
 
+/* FIX: Metric Delta Pills — NO WHITE BOXES! */
+[data-testid="stMetricDelta"],
+[data-testid="stMetricDelta"] > div {
+    background: __DELTA_PILL_BG__ !important;
+    border: 1px solid __DELTA_PILL_BORDER__ !important;
+    border-radius: 999px !important;
+    padding: 2px 10px !important;
+    width: fit-content !important;
+}
+
+[data-testid="stMetricDelta"] * {
+    color: __DELTA_PILL_TEXT__ !important;
+}
+
 /* 6. GENERIC BORDERED CONTAINERS */
 div[data-testid="stVerticalBlockBorderWrapper"] {
     background: __GLASS_BG__ !important;
@@ -170,17 +196,21 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
     padding: 1.25rem 1.5rem !important;
 }
 
-/* 7. GREEN QR VERIFICATION BANNER */
-div[data-testid="stNotification"][data-test-color="success"],
-div.stAlert:has(div[data-testid="stNotificationContentSuccess"]) {
-    background: rgba(16, 185, 129, 0.15) !important;
-    border: 1px solid rgba(16, 185, 129, 0.35) !important;
-    color: #10b981 !important;
+/* 7. FIX: GREEN QR VERIFICATION BANNER — NO SOLID WHITE BOX! */
+div[data-testid="stAlert"],
+div[data-testid="stNotification"],
+div.stAlert {
+    background: __ALERT_QR_BG__ !important;
+    border: 1.5px solid __ALERT_QR_BORDER__ !important;
     border-radius: 16px !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.04) !important;
 }
 
+div[data-testid="stAlert"] *,
+div[data-testid="stNotification"] *,
 div.stAlert * {
-    color: inherit !important;
+    color: __ALERT_QR_TEXT__ !important;
+    background: transparent !important;
 }
 
 /* 8. BUTTONS */
@@ -257,6 +287,12 @@ div.stAlert * {
         .replace("__BUTTON_BG__", button_bg)
         .replace("__BUTTON_BORDER__", button_border)
         .replace("__BUTTON_TEXT__", button_text)
+        .replace("__ALERT_QR_BG__", alert_qr_bg)
+        .replace("__ALERT_QR_BORDER__", alert_qr_border)
+        .replace("__ALERT_QR_TEXT__", alert_qr_text)
+        .replace("__DELTA_PILL_BG__", delta_pill_bg)
+        .replace("__DELTA_PILL_BORDER__", delta_pill_border)
+        .replace("__DELTA_PILL_TEXT__", delta_pill_text)
     )
 
     st.markdown(css, unsafe_allow_html=True)
