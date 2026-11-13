@@ -189,49 +189,25 @@ def render_trends_view() -> None:
 
     # --- Trend Cards ---
     st.markdown("### Ключевые тренды")
-    c1, c2, c3, c4 = st.columns(4)
-
     card_style = (
         f"background:{card_bg};border-radius:16px;padding:18px 16px;"
         f"border:1px solid {card_border};height:100%;box-shadow: 0 4px 12px rgba(0,0,0,0.05);"
     )
 
-    with c1:
-        st.markdown(
-            f"<div style='{card_style}'>"
-            f"<p style='color:#f59e0b;font-size:18px;font-weight:700;margin:0;'>🔥 Отопление</p>"
-            f"<p style='color:{text_color};font-size:26px;font-weight:800;margin:6px 0 2px;'>+38%</p>"
-            f"<p style='color:{text_muted};font-size:13px;margin:0;'>в ноябре (морозы)</p>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+    trends = [
+        ("🔥 Отопление", "#f59e0b", "+38%", text_color, "в ноябре (морозы)"),
+        ("💧 Холодная вода", "#0284c7", "+127%", "#e11d48", "включен коэфф. 1.5!"),
+        ("♨️ Горячая вода", "#e11d48", "+9%", text_color, "индексация с июля"),
+        ("⚡ Электричество", "#059669", "±3%", text_color, "норматив стабилен"),
+    ]
 
-    with c2:
-        st.markdown(
-            f"<div style='{card_style}'>"
-            f"<p style='color:#0284c7;font-size:18px;font-weight:700;margin:0;'>💧 Холодная вода</p>"
-            f"<p style='color:#e11d48;font-size:26px;font-weight:800;margin:6px 0 2px;'>+127%</p>"
-            f"<p style='color:{text_muted};font-size:13px;margin:0;'>включен коэфф. 1.5!</p>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-    with c3:
-        st.markdown(
-            f"<div style='{card_style}'>"
-            f"<p style='color:#e11d48;font-size:18px;font-weight:700;margin:0;'>♨️ Горячая вода</p>"
-            f"<p style='color:{text_color};font-size:26px;font-weight:800;margin:6px 0 2px;'>+9%</p>"
-            f"<p style='color:{text_muted};font-size:13px;margin:0;'>индексация с июля</p>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-    with c4:
-        st.markdown(
-            f"<div style='{card_style}'>"
-            f"<p style='color:#059669;font-size:18px;font-weight:700;margin:0;'>⚡ Электричество</p>"
-            f"<p style='color:{text_color};font-size:26px;font-weight:800;margin:6px 0 2px;'>±3%</p>"
-            f"<p style='color:{text_muted};font-size:13px;margin:0;'>норматив стабилен</p>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+    for col, (title, title_color, val, val_color, desc) in zip(st.columns(4), trends):
+        with col:
+            st.markdown(
+                f"<div style='{card_style}'>"
+                f"<p style='color:{title_color};font-size:18px;font-weight:700;margin:0;'>{title}</p>"
+                f"<p style='color:{val_color};font-size:26px;font-weight:800;margin:6px 0 2px;'>{val}</p>"
+                f"<p style='color:{text_muted};font-size:13px;margin:0;'>{desc}</p>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )

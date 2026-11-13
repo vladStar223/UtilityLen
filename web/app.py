@@ -19,14 +19,13 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-if "theme_dark" not in st.session_state:
-    st.session_state["theme_dark"] = False
-if "active_screen" not in st.session_state:
-    st.session_state["active_screen"] = "analysis"
-if "case_id" not in st.session_state:
-    st.session_state["case_id"] = "case_02_coeff_15"
-if "analysis_result" not in st.session_state:
-    st.session_state["analysis_result"] = None
+for k, v in {
+    "theme_dark": False,
+    "active_screen": "analysis",
+    "case_id": "case_02_coeff_15",
+    "analysis_result": None,
+}.items():
+    st.session_state.setdefault(k, v)
 
 # Apply adaptive styles based on selected theme
 apply_styles(st.session_state["theme_dark"])

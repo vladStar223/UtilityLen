@@ -58,7 +58,7 @@ def render_anomalies(anomalies: list):
             </p>
         </div>
         <div style="text-align: right; min-width: 130px;">
-            <span style="font-size: 11px; font-weight: 600; opacity: 0.7; text-transform: uppercase;">
+            <span style="font-size: 11px; font-weight: 600; color: {hint_color}; text-transform: uppercase;">
                 Переплата
             </span>
             <div style="font-size: 20px; font-weight: 800; color: {impact_color};">

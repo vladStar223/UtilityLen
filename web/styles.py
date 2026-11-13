@@ -271,28 +271,30 @@ div.stAlert * {
 }
 </style>
 """
-    css = (
-        css.replace("__APP_BG__", app_bg)
-        .replace("__TEXT_COLOR__", text_color)
-        .replace("__TEXT_MUTED__", text_muted)
-        .replace("__GLASS_BG__", glass_bg)
-        .replace("__SIDEBAR_BG__", sidebar_bg)
-        .replace("__EXPANDER_BG__", expander_bg)
-        .replace("__INPUT_BG__", input_bg)
-        .replace("__CHAT_BG__", chat_bg)
-        .replace("__GLASS_BORDER__", glass_border)
-        .replace("__GLASS_SHADOW__", glass_shadow)
-        .replace("__ACCENT__", accent)
-        .replace("__ACCENT_STRONG__", accent_strong)
-        .replace("__BUTTON_BG__", button_bg)
-        .replace("__BUTTON_BORDER__", button_border)
-        .replace("__BUTTON_TEXT__", button_text)
-        .replace("__ALERT_QR_BG__", alert_qr_bg)
-        .replace("__ALERT_QR_BORDER__", alert_qr_border)
-        .replace("__ALERT_QR_TEXT__", alert_qr_text)
-        .replace("__DELTA_PILL_BG__", delta_pill_bg)
-        .replace("__DELTA_PILL_BORDER__", delta_pill_border)
-        .replace("__DELTA_PILL_TEXT__", delta_pill_text)
-    )
+    tokens = {
+        "__APP_BG__": app_bg,
+        "__TEXT_COLOR__": text_color,
+        "__TEXT_MUTED__": text_muted,
+        "__GLASS_BG__": glass_bg,
+        "__SIDEBAR_BG__": sidebar_bg,
+        "__EXPANDER_BG__": expander_bg,
+        "__INPUT_BG__": input_bg,
+        "__CHAT_BG__": chat_bg,
+        "__GLASS_BORDER__": glass_border,
+        "__GLASS_SHADOW__": glass_shadow,
+        "__ACCENT__": accent,
+        "__ACCENT_STRONG__": accent_strong,
+        "__BUTTON_BG__": button_bg,
+        "__BUTTON_BORDER__": button_border,
+        "__BUTTON_TEXT__": button_text,
+        "__ALERT_QR_BG__": alert_qr_bg,
+        "__ALERT_QR_BORDER__": alert_qr_border,
+        "__ALERT_QR_TEXT__": alert_qr_text,
+        "__DELTA_PILL_BG__": delta_pill_bg,
+        "__DELTA_PILL_BORDER__": delta_pill_border,
+        "__DELTA_PILL_TEXT__": delta_pill_text,
+    }
+    for placeholder, val in tokens.items():
+        css = css.replace(placeholder, val)
 
     st.markdown(css, unsafe_allow_html=True)
