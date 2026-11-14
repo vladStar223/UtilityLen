@@ -61,22 +61,28 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
         _analyzeFile(File(widget.filePath!));
       });
     } else {
+      // Тестовые образцы уже полностью обработаны — открываем верификацию мгновенно без задержек
+      final sampleResponse = _apiClient.buildSampleResponse(widget.caseId);
+      _uploadResponse = sampleResponse;
+      _isLoading = false;
+      final data = sampleResponse.extractedData;
+      if (data != null) {
+        _displayProvider = data.providerName;
+        _displayAddress = data.address;
+        _displayAmount = data.totalAmount;
+        _displayPeriod = data.period;
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _analyzeSampleCase(widget.caseId);
+        BillVerificationSheet.show(
+          context,
+          response: sampleResponse,
+          onRetake: () => Navigator.pop(context),
+        );
       });
     }
   }
 
   Future<void> _analyzeSampleCase(String caseId) async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    // Имитация реалистичной работы нейросети для записи видео и демо
-    await Future.delayed(const Duration(milliseconds: 1100));
-    if (!mounted) return;
-
     final sampleResponse = _apiClient.buildSampleResponse(caseId);
 
     setState(() {

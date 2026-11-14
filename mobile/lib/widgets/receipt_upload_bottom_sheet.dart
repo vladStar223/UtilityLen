@@ -203,7 +203,7 @@ class ReceiptUploadBottomSheet extends StatelessWidget {
                     address: 'г. Владивосток, Океанский проспект',
                     period: 'Октябрь 2026',
                     sum: '5 420,00 ₽',
-                    anomaly: 'Начисления в норме (без штрафов)',
+                    anomaly: 'Начисления в норме (сезонный пуск отопления)',
                     asset: 'assets/receipts/receipt_vladivostok_3.webp',
                     caseId: 'case_01_heating_spike',
                   ),
