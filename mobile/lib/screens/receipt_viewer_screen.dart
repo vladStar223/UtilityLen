@@ -7,6 +7,7 @@ import '../core/api_client.dart';
 import '../core/models.dart';
 import '../core/theme.dart';
 import '../widgets/bill_verification_sheet.dart';
+import '../widgets/receipt_upload_bottom_sheet.dart';
 import 'main_scaffold.dart';
 
 /// Экран детального просмотра квитанции (из галереи, камеры или примеров)
@@ -227,11 +228,11 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
   Widget _buildBottomCardContent() {
     // 1. Loading state
     if (_isLoading) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
         child: Row(
           children: [
-            const SizedBox(
+            SizedBox(
               width: 24,
               height: 24,
               child: CircularProgressIndicator(
@@ -239,12 +240,12 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
                 color: AppColors.primary,
               ),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
-                children: const [
+                children: [
                   Text(
                     'Анализируем квитанцию на сервере...',
                     style: TextStyle(
@@ -317,9 +318,12 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
-                  label: const Text('Назад'),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    ReceiptUploadBottomSheet.show(context);
+                  },
+                  icon: const Icon(Icons.folder_special_rounded, size: 18),
+                  label: const Text('Образцы'),
                 ),
               ),
               const SizedBox(width: 12),

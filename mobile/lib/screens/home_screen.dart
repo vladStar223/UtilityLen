@@ -29,7 +29,10 @@ class HomeScreen extends StatelessWidget {
         final deltaAmount = report?.summary.deltaAbs ?? 1470.50;
         final overpayment = report?.anomalies.isNotEmpty == true
             ? report!.anomalies.first.impactRub
-            : 245.18;
+            : 0.0;
+        final anomalySubtitle = report?.anomalies.isNotEmpty == true
+            ? report!.anomalies.first.hint
+            : 'Отклонений от нормативов и тарифов не обнаружено.';
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -141,21 +144,59 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
 
-                  // Anomaly alert banner
-                  AnomalyBanner(
-                    amount: overpayment,
-                    title: 'Обнаружена возможная переплата',
-                    subtitle: 'Применён повышающий коэффициент 1,5 по ХВС. Требуется проверка.',
-                    onTap: () => _openAnomalyModal(context, overpayment),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // Big CTA Button: Разобраться с проблемой
-                  ElevatedButton.icon(
-                    onPressed: () => _openAnomalyModal(context, overpayment),
-                    icon: const Icon(Icons.auto_awesome_rounded, size: 20),
-                    label: const Text('Разобраться с проблемой'),
-                  ),
+                  // Anomaly alert banner or Normal banner
+                  if (overpayment > 0) ...[
+                    AnomalyBanner(
+                      amount: overpayment,
+                      title: 'Обнаружена возможная переплата',
+                      subtitle: anomalySubtitle,
+                      onTap: () => _openAnomalyModal(context, overpayment),
+                    ),
+                    const SizedBox(height: 18),
+                    ElevatedButton.icon(
+                      onPressed: () => _openAnomalyModal(context, overpayment),
+                      icon: const Icon(Icons.auto_awesome_rounded, size: 20),
+                      label: const Text('Разобраться с проблемой'),
+                    ),
+                  ] else ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.successLight,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.check_circle_rounded, color: AppColors.success, size: 24),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Начисления в норме',
+                                  style: TextStyle(
+                                    color: AppColors.textPrimary,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Тарифы и объёмы соответствуют нормативам',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 24),
 
                   // Recent receipts section
@@ -185,12 +226,24 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
 
-                  // Receipt history row
-                  _buildReceiptTile(
-                    month: 'Октябрь 2026',
-                    amount: '5 420,00 ₽',
-                    onTap: onNavigateToReceipts,
-                  ),
+                  // Receipt history rows
+                  if (state.history.isNotEmpty)
+                    ...state.history.take(2).map(
+                          (item) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _buildReceiptTile(
+                              month: item.period,
+                              amount: '${item.totalAmount.toStringAsFixed(2).replaceAll('.', ',')} ₽',
+                              onTap: onNavigateToReceipts,
+                            ),
+                          ),
+                        )
+                  else
+                    _buildReceiptTile(
+                      month: 'Октябрь 2026',
+                      amount: '5 420,00 ₽',
+                      onTap: onNavigateToReceipts,
+                    ),
                   const SizedBox(height: 16),
                 ],
               ),

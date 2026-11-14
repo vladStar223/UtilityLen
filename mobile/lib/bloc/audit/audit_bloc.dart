@@ -23,20 +23,46 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
     emit(_buildLoadedState(event.report));
   }
 
+  static String _periodToHuman(String period) {
+    if (period.contains('11')) return 'Ноябрь 2026';
+    if (period.contains('10')) return 'Октябрь 2026';
+    if (period.contains('09')) return 'Сентябрь 2026';
+    if (period.contains('08')) return 'Август 2026';
+    return period.isNotEmpty ? period : 'Ноябрь 2026';
+  }
+
+  static String _periodToMonthLabel(String period) {
+    if (period.contains('11')) return 'Ноя';
+    if (period.contains('10')) return 'Окт';
+    if (period.contains('09')) return 'Сен';
+    if (period.contains('08')) return 'Авг';
+    if (period.contains('07')) return 'Июл';
+    if (period.contains('06')) return 'Июн';
+    return period;
+  }
+
   AuditState _buildLoadedState(ComparisonReport report) {
     const history = [
+      ReceiptHistoryItem(
+        id: 'rec_2026_11',
+        period: 'Ноябрь 2026',
+        totalAmount: 6890.50,
+        providerName: 'ДЭК «Дальэнергосбыт» / ХВС',
+        hasOverpayment: true,
+        overpaymentAmount: 245.18,
+      ),
       ReceiptHistoryItem(
         id: 'rec_2026_10',
         period: 'Октябрь 2026',
         totalAmount: 5420.00,
-        providerName: 'Примводоканал · ДЭК',
+        providerName: 'АО «Дальневосточная РКЦ»',
         hasOverpayment: false,
       ),
       ReceiptHistoryItem(
         id: 'rec_2026_09',
         period: 'Сентябрь 2026',
-        totalAmount: 5200.00,
-        providerName: 'Примводоканал · ДЭК',
+        totalAmount: 1437.50,
+        providerName: 'КГУП «Примводоканал»',
         hasOverpayment: true,
         overpaymentAmount: 686.56,
       ),
@@ -44,35 +70,43 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
         id: 'rec_2026_08',
         period: 'Август 2026',
         totalAmount: 5100.00,
-        providerName: 'Примводоканал',
+        providerName: 'КГУП «Приморский водоканал»',
         hasOverpayment: false,
       ),
     ];
 
-    const trends = [
-      MonthlyTrendItem(monthLabel: 'Июн', amount: 4200),
-      MonthlyTrendItem(monthLabel: 'Июл', amount: 4800),
-      MonthlyTrendItem(monthLabel: 'Авг', amount: 5100),
-      MonthlyTrendItem(monthLabel: 'Сен', amount: 5200),
-      MonthlyTrendItem(monthLabel: 'Окт', amount: 5420),
-      MonthlyTrendItem(monthLabel: 'Ноя', amount: 6890.5),
+    final currAmount = report.summary.currTotal;
+    final prevAmount = report.summary.prevTotal;
+    final currPeriod = report.summary.currPeriod;
+    final prevPeriod = report.summary.prevPeriod;
+
+    final currLabel = _periodToMonthLabel(currPeriod);
+    final prevLabel = _periodToMonthLabel(prevPeriod);
+
+    final trends = [
+      const MonthlyTrendItem(monthLabel: 'Июн', amount: 4200),
+      const MonthlyTrendItem(monthLabel: 'Июл', amount: 4800),
+      const MonthlyTrendItem(monthLabel: 'Авг', amount: 5100),
+      MonthlyTrendItem(monthLabel: prevLabel, amount: prevAmount),
+      MonthlyTrendItem(monthLabel: currLabel, amount: currAmount),
     ];
 
     final overpaymentAmount = report.anomalies.isNotEmpty
         ? report.anomalies.first.impactRub
-        : 245.18;
+        : 0.0;
     final overpaymentDesc = report.anomalies.isNotEmpty
         ? report.anomalies.first.hint
-        : 'Возможная переплата за ХВС с коэффициентом 1.5';
+        : 'Начисления в норме, переплат не обнаружено';
 
     final alerts = [
-      AlertNotificationItem(
-        id: 'alert_critical_1',
-        title: '1 критическая проблема',
-        description: overpaymentDesc,
-        severity: 'critical',
-        amount: overpaymentAmount,
-      ),
+      if (overpaymentAmount > 0)
+        AlertNotificationItem(
+          id: 'alert_critical_1',
+          title: '1 критическая проблема',
+          description: overpaymentDesc,
+          severity: 'critical',
+          amount: overpaymentAmount,
+        ),
       const AlertNotificationItem(
         id: 'alert_meter_warning',
         title: 'Срок поверки счётчика',
@@ -93,12 +127,15 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
       ),
     ];
 
+    final humanPeriod = _periodToHuman(report.summary.currPeriod);
+
     return state.copyWith(
       status: AuditStatus.loaded,
       report: report,
       history: history,
       monthlyTrends: trends,
       alerts: alerts,
+      selectedPeriod: humanPeriod,
     );
   }
 
@@ -118,11 +155,31 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
     }
   }
 
-  void _onChangePeriod(
+  Future<void> _onChangePeriod(
     ChangePeriodEvent event,
     Emitter<AuditState> emit,
-  ) {
-    emit(state.copyWith(selectedPeriod: event.period));
+  ) async {
+    final String targetCase;
+    if (event.period.contains('Окт')) {
+      targetCase = 'case_01_heating_spike';
+    } else if (event.period.contains('Сен')) {
+      targetCase = 'case_04_vladivostok_coeff3';
+    } else if (event.period.contains('Авг')) {
+      targetCase = 'case_03_tariff_index';
+    } else {
+      targetCase = 'case_02_coeff_15';
+    }
+
+    emit(state.copyWith(status: AuditStatus.loading, selectedPeriod: event.period));
+    try {
+      final report = await apiClient.compareBills(caseId: targetCase);
+      emit(_buildLoadedState(report).copyWith(selectedPeriod: event.period));
+    } catch (e) {
+      emit(state.copyWith(
+        status: AuditStatus.error,
+        errorMessage: e.toString(),
+      ));
+    }
   }
 
   void _onFilterCategory(
@@ -136,7 +193,6 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
     CaptureReceiptPhotoEvent event,
     Emitter<AuditState> emit,
   ) async {
-    // При фотосъемке квитанции запускаем факторный аудит
     add(LoadAuditDataEvent(caseId: event.caseId));
   }
 
@@ -144,7 +200,6 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
     ScanQrEvent event,
     Emitter<AuditState> emit,
   ) async {
-    // Совместимость: загружаем кейс
     add(const LoadAuditDataEvent(caseId: 'case_04_vladivostok_coeff3'));
   }
 }

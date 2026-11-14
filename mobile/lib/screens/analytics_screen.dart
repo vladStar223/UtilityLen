@@ -14,6 +14,107 @@ class AnalyticsScreen extends StatefulWidget {
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
   int _selectedPeriodIndex = 1; // 0: 3 мес, 1: 6 мес, 2: 12 мес
+  String _selectedCategoryFilter = 'Все начисления';
+
+  void _showFilterSheet(BuildContext context) {
+    final categories = ['Все начисления', 'Холодная вода (ХВС)', 'Отопление', 'Электроэнергия', 'Водоотведение'];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          decoration: const BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Параметры аналитики',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Срез услуг',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: categories.map((cat) {
+                    final isSel = _selectedCategoryFilter == cat;
+                    return ChoiceChip(
+                      label: Text(cat),
+                      selected: isSel,
+                      onSelected: (selected) {
+                        if (selected) {
+                          setSheetState(() => _selectedCategoryFilter = cat);
+                          setState(() => _selectedCategoryFilter = cat);
+                        }
+                      },
+                      selectedColor: AppColors.primaryLight,
+                      labelStyle: TextStyle(
+                        color: isSel ? AppColors.primary : AppColors.textPrimary,
+                        fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
+                        fontSize: 12,
+                      ),
+                      backgroundColor: AppColors.background,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: isSel ? AppColors.primary : AppColors.border,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Применить'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +131,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 MonthlyTrendItem(monthLabel: 'Ноя', amount: 6890.5),
               ];
 
+        final List<MonthlyTrendItem> visibleTrends;
+        if (_selectedPeriodIndex == 0 && trends.length >= 3) {
+          visibleTrends = trends.sublist(trends.length - 3);
+        } else if (_selectedPeriodIndex == 1 && trends.length >= 6) {
+          visibleTrends = trends.sublist(trends.length - 6);
+        } else {
+          visibleTrends = trends;
+        }
+
+        final deltaPct = state.report?.summary.deltaPct ?? 27.1;
+        final deltaSign = deltaPct > 0 ? '+' : '';
+        final isCriticalRise = deltaPct > 15;
+        final deltaColor = isCriticalRise ? AppColors.critical : AppColors.success;
+
         return Scaffold(
           backgroundColor: AppColors.background,
           appBar: AppBar(
@@ -37,7 +152,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             actions: [
               IconButton(
                 icon: const Icon(Icons.tune_rounded, color: AppColors.textPrimary),
-                onPressed: () {},
+                tooltip: 'Параметры аналитики',
+                onPressed: () => _showFilterSheet(context),
               ),
             ],
           ),
@@ -86,19 +202,40 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Динамика общей суммы',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Динамика общей суммы',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (_selectedCategoryFilter != 'Все начисления')
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryLight,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              _selectedCategoryFilter,
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 4),
-                    const Text(
-                      '+27,1%',
+                    Text(
+                      '$deltaSign${deltaPct.toStringAsFixed(1).replaceAll('.', ',')}%',
                       style: TextStyle(
-                        color: AppColors.success,
+                        color: deltaColor,
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
                       ),
@@ -117,7 +254,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       height: 180,
                       child: CustomPaint(
                         size: const Size(double.infinity, 180),
-                        painter: _TrendChartPainter(trends: trends),
+                        painter: _TrendChartPainter(trends: visibleTrends),
                       ),
                     ),
                   ],
@@ -179,14 +316,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       child: Container(
         height: 38,
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.transparent,
+          color: isSelected ? AppColors.card : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Center(
           child: Text(
             title,
             style: TextStyle(
-              color: isSelected ? Colors.white : AppColors.textSecondary,
+              color: isSelected ? AppColors.primary : AppColors.textSecondary,
               fontSize: 13,
               fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
             ),
@@ -207,16 +353,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: bgColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(emoji, style: const TextStyle(fontSize: 18)),
+              Text(emoji, style: const TextStyle(fontSize: 20)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -226,6 +372,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -235,7 +382,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             changeText,
             style: TextStyle(
               color: color,
-              fontSize: 22,
+              fontSize: 20,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -262,104 +409,94 @@ class _TrendChartPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (trends.isEmpty) return;
 
-    final width = size.width;
-    final height = size.height - 30; // Leave space for month labels
+    final amounts = trends.map((t) => t.amount).toList();
+    final minAmount = amounts.reduce((a, b) => a < b ? a : b) * 0.85;
+    final maxAmount = amounts.reduce((a, b) => a > b ? a : b) * 1.15;
+    final range = (maxAmount - minAmount) > 0 ? (maxAmount - minAmount) : 1.0;
 
-    const maxVal = 8000.0;
-    const minVal = 2000.0;
+    final bottomY = size.height - 24;
+    const topY = 28.0;
+    final availableHeight = bottomY - topY;
 
-    // Draw horizontal dashed grid lines (2k, 4k, 6k, 8k)
+    // Draw horizontal dashed grid lines
     final gridPaint = Paint()
-      ..color = AppColors.border.withValues(alpha: 0.6)
+      ..color = AppColors.border
+      ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
 
-    for (int i = 0; i <= 3; i++) {
-      final y = height - (i * (height / 3));
-      canvas.drawLine(Offset(25, y), Offset(width, y), gridPaint);
-
-      // Y-axis label text
-      final label = '${(minVal + (i * 2000)).toInt() ~/ 1000}k';
-      final textSpan = TextSpan(
-        text: label,
-        style: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
-      );
-      final textPainter = TextPainter(
-        text: textSpan,
-        textDirection: TextDirection.ltr,
-      )..layout();
-      textPainter.paint(canvas, Offset(0, y - 6));
+    for (int i = 0; i < 3; i++) {
+      final y = topY + (availableHeight / 2) * i;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
 
-    // Compute point coordinates
+    // Calculate (x, y) coordinates for each point
+    final pointCount = trends.length;
+    final stepX = pointCount > 1 ? size.width / (pointCount - 1) : size.width;
     final points = <Offset>[];
-    final stepX = (width - 45) / (trends.length - 1);
 
-    for (int i = 0; i < trends.length; i++) {
-      final x = 35 + (i * stepX);
-      final normalized = (trends[i].amount - minVal) / (maxVal - minVal);
-      final y = height - (normalized * height);
+    for (int i = 0; i < pointCount; i++) {
+      final x = i * stepX;
+      final normalized = (trends[i].amount - minAmount) / range;
+      final y = bottomY - (normalized * availableHeight);
       points.add(Offset(x, y));
+    }
 
-      // Month label
+    // Draw month labels at the bottom
+    for (int i = 0; i < pointCount; i++) {
       final textSpan = TextSpan(
         text: trends[i].monthLabel,
-        style: TextStyle(
-          color: i == trends.length - 1 ? AppColors.primary : AppColors.textSecondary,
+        style: const TextStyle(
+          color: AppColors.textSecondary,
           fontSize: 11,
-          fontWeight: i == trends.length - 1 ? FontWeight.w700 : FontWeight.w500,
+          fontWeight: FontWeight.w500,
         ),
       );
       final textPainter = TextPainter(
         text: textSpan,
         textDirection: TextDirection.ltr,
       )..layout();
-      textPainter.paint(canvas, Offset(x - (textPainter.width / 2), height + 10));
+
+      final labelX = points[i].dx - (textPainter.width / 2);
+      textPainter.paint(canvas, Offset(labelX.clamp(0.0, size.width - textPainter.width), size.height - 14));
     }
 
-    // Draw gradient fill area
+    // Draw smooth cubic spline curve
     final path = Path();
-    path.moveTo(points.first.dx, height);
-    path.lineTo(points.first.dx, points.first.dy);
+    path.moveTo(points.first.dx, points.first.dy);
 
     for (int i = 0; i < points.length - 1; i++) {
-      final p1 = points[i];
-      final p2 = points[i + 1];
-      final controlX = (p1.dx + p2.dx) / 2;
-      path.cubicTo(controlX, p1.dy, controlX, p2.dy, p2.dx, p2.dy);
+      final p0 = points[i];
+      final p1 = points[i + 1];
+      final midX = (p0.dx + p1.dx) / 2;
+      path.cubicTo(midX, p0.dy, midX, p1.dy, p1.dx, p1.dy);
     }
 
-    path.lineTo(points.last.dx, height);
-    path.close();
+    // Draw gradient fill under the curve
+    final fillPath = Path.from(path)
+      ..lineTo(points.last.dx, bottomY)
+      ..lineTo(points.first.dx, bottomY)
+      ..close();
 
     final fillPaint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          AppColors.primary.withValues(alpha: 0.28),
+          AppColors.primary.withValues(alpha: 0.22),
           AppColors.primary.withValues(alpha: 0.0),
         ],
-      ).createShader(Rect.fromLTWH(0, 0, width, height));
+      ).createShader(Rect.fromLTWH(0, 0, size.width, bottomY));
 
-    canvas.drawPath(path, fillPaint);
+    canvas.drawPath(fillPath, fillPaint);
 
-    // Draw smooth curve stroke
-    final strokePath = Path();
-    strokePath.moveTo(points.first.dx, points.first.dy);
-    for (int i = 0; i < points.length - 1; i++) {
-      final p1 = points[i];
-      final p2 = points[i + 1];
-      final controlX = (p1.dx + p2.dx) / 2;
-      strokePath.cubicTo(controlX, p1.dy, controlX, p2.dy, p2.dx, p2.dy);
-    }
-
+    // Draw curve stroke line
     final strokePaint = Paint()
       ..color = AppColors.primary
-      ..strokeWidth = 3
       ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
 
-    canvas.drawPath(strokePath, strokePaint);
+    canvas.drawPath(strokePath(path), strokePaint);
 
     // Draw peak point on last item
     final lastPoint = points.last;
@@ -369,9 +506,15 @@ class _TrendChartPainter extends CustomPainter {
     canvas.drawCircle(lastPoint, 6, dotPaint);
     canvas.drawCircle(lastPoint, 3, whiteRingPaint);
 
-    // Draw tooltip tag "6 890 ₽" above peak
+    // Draw tooltip tag above peak with dynamic amount
+    final lastAmount = trends.last.amount;
+    final formattedAmount = lastAmount >= 1000
+        ? '${lastAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]} ')} ₽'
+        : '${lastAmount.toStringAsFixed(2).replaceAll('.', ',')} ₽';
+
+    final bubbleWidth = (formattedAmount.length * 8.5) + 16.0;
     final bubbleRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(lastPoint.dx - 10, lastPoint.dy - 24), width: 68, height: 24),
+      Rect.fromCenter(center: Offset(lastPoint.dx - 10, lastPoint.dy - 24), width: bubbleWidth, height: 24),
       const Radius.circular(8),
     );
     canvas.drawRRect(bubbleRect, Paint()..color = AppColors.card);
@@ -383,9 +526,9 @@ class _TrendChartPainter extends CustomPainter {
         ..strokeWidth = 1,
     );
 
-    const tipTextSpan = TextSpan(
-      text: '6 890 ₽',
-      style: TextStyle(
+    final tipTextSpan = TextSpan(
+      text: formattedAmount,
+      style: const TextStyle(
         color: AppColors.textPrimary,
         fontSize: 11,
         fontWeight: FontWeight.w800,
@@ -400,6 +543,8 @@ class _TrendChartPainter extends CustomPainter {
       Offset(lastPoint.dx - 10 - (tipPainter.width / 2), lastPoint.dy - 30),
     );
   }
+
+  Path strokePath(Path path) => path;
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;

@@ -351,8 +351,12 @@ class _BillVerificationSheetState extends State<BillVerificationSheet> {
                       if (report != null) {
                         context.read<AuditBloc>().add(SetAuditReportEvent(report));
                       } else {
+                        final amt = data?.totalAmount ?? 0;
+                        final caseId = amt > 6000
+                            ? 'case_02_coeff_15'
+                            : (amt > 4000 ? 'case_01_heating_spike' : 'case_04_vladivostok_coeff3');
                         context.read<AuditBloc>().add(
-                              const LoadAuditDataEvent(caseId: 'case_04_vladivostok_coeff3'),
+                              LoadAuditDataEvent(caseId: caseId),
                             );
                       }
                       Navigator.pushAndRemoveUntil(

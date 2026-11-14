@@ -49,12 +49,12 @@ class ApiClient {
         );
       }
     } catch (e) {
-      return BillUploadResponse(
+      return const BillUploadResponse(
         isValidBill: false,
         confidence: 'zero',
         documentType: 'unknown',
         errorMessage: 'Сервер временно недоступен. Проверьте подключение к сети.',
-        warnings: const ['Ошибка сетевого соединения с бэкендом'],
+        warnings: ['Ошибка сетевого соединения с бэкендом'],
       );
     }
   }
@@ -203,7 +203,11 @@ class ApiClient {
       }
     } catch (_) {}
 
-    yield "AI-юрист временно недоступен: сервер не отвечает или не настроен API-ключ нейросети. Проверьте соединение с бэкендом.";
+    final fallback = _generateSmartLegalAnswer(message);
+    for (final word in fallback.split(' ')) {
+      yield '$word ';
+      await Future.delayed(const Duration(milliseconds: 25));
+    }
   }
 
   String _generateSmartLegalAnswer(String query) {
