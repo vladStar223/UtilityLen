@@ -12,49 +12,75 @@ class ApiClient {
 
   String? _lastComparisonId;
 
+  /// Загрузка байтов квитанции на бэкенд с автоматическим выбором порта (8000 или 80 Nginx)
+  Future<BillUploadResponse> uploadBillBytes(List<int> bytes, String filename) async {
+    final endpoints = [
+      ApiConfig.uploadBillEndpoint,
+      "http://136.234.72.54/api/v1/bills/upload",
+    ];
+
+    for (final endpoint in endpoints) {
+      try {
+        final request = http.MultipartRequest('POST', Uri.parse(endpoint));
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            bytes,
+            filename: filename,
+          ),
+        );
+
+        final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+        final response = await http.Response.fromStream(streamedResponse);
+
+        if (response.statusCode == 200) {
+          if (endpoint.contains(":8000")) {
+            ApiConfig.baseUrl = "http://136.234.72.54:8000";
+          } else {
+            ApiConfig.baseUrl = "http://136.234.72.54";
+          }
+          final data = json.decode(utf8.decode(response.bodyBytes));
+          final result = BillUploadResponse.fromJson(data);
+          if (result.report?.comparisonId != null) {
+            _lastComparisonId = result.report!.comparisonId;
+          }
+          return result;
+        } else {
+          return BillUploadResponse(
+            isValidBill: false,
+            confidence: 'zero',
+            documentType: 'unknown',
+            errorMessage: 'Ошибка сервера (код ${response.statusCode})',
+            warnings: const ['Сервер не смог обработать файл'],
+          );
+        }
+      } catch (_) {
+        // Fallback to next endpoint
+      }
+    }
+
+    return BillUploadResponse(
+      isValidBill: false,
+      confidence: 'zero',
+      documentType: 'unknown',
+      errorMessage: 'Сервер временно недоступен. Проверьте подключение к сети.',
+      warnings: const ['Ошибка сетевого соединения с бэкендом'],
+    );
+  }
+
   /// Загрузка файла квитанции на бэкенд для распознавания и валидации
   Future<BillUploadResponse> uploadBillFile(File file) async {
     try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse(ApiConfig.uploadBillEndpoint),
-      );
-
+      final bytes = await file.readAsBytes();
       final fileName = file.path.split(Platform.pathSeparator).last;
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'file',
-          file.path,
-          filename: fileName,
-        ),
-      );
-
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 40));
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode == 200) {
-        final data = json.decode(utf8.decode(response.bodyBytes));
-        final result = BillUploadResponse.fromJson(data);
-        if (result.report?.comparisonId != null) {
-          _lastComparisonId = result.report!.comparisonId;
-        }
-        return result;
-      } else {
-        return BillUploadResponse(
-          isValidBill: false,
-          confidence: 'zero',
-          documentType: 'unknown',
-          errorMessage: 'Ошибка сервера (код ${response.statusCode})',
-          warnings: const ['Сервер не смог обработать файл'],
-        );
-      }
+      return uploadBillBytes(bytes, fileName);
     } catch (e) {
       return BillUploadResponse(
         isValidBill: false,
         confidence: 'zero',
         documentType: 'unknown',
-        errorMessage: 'Сервер временно недоступен. Проверьте подключение к сети.',
-        warnings: const ['Ошибка сетевого соединения с бэкендом'],
+        errorMessage: 'Не удалось прочитать файл на устройстве: $e',
+        warnings: const ['Ошибка чтения локального файла'],
       );
     }
   }

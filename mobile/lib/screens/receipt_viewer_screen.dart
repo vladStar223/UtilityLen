@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/audit/audit_bloc.dart';
 import '../bloc/audit/audit_event.dart';
@@ -60,22 +61,47 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _analyzeFile(File(widget.filePath!));
       });
-    } else {
-      // Тестовые образцы уже полностью обработаны — открываем верификацию мгновенно без задержек
-      final sampleResponse = _apiClient.buildSampleResponse(widget.caseId);
-      _uploadResponse = sampleResponse;
-      _isLoading = false;
-      final data = sampleResponse.extractedData;
-      if (data != null) {
-        _displayProvider = data.providerName;
-        _displayAddress = data.address;
-        _displayAmount = data.totalAmount;
-        _displayPeriod = data.period;
-      }
+    } else if (widget.assetPath != null && widget.assetPath!.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        _analyzeAsset(widget.assetPath!);
+      });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _analyzeSampleCase(widget.caseId);
+      });
+    }
+  }
+
+  Future<void> _analyzeAsset(String assetPath) async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final byteData = await rootBundle.load(assetPath);
+      final bytes = byteData.buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes);
+      final filename = assetPath.split('/').last;
+
+      final response = await _apiClient.uploadBillBytes(bytes, filename);
+      if (!mounted) return;
+
+      if (response.isValidBill) {
+        setState(() {
+          _isLoading = false;
+          _uploadResponse = response;
+          final data = response.extractedData;
+          if (data != null) {
+            _displayProvider = data.providerName;
+            _displayAddress = data.address;
+            _displayAmount = data.totalAmount;
+            _displayPeriod = data.period;
+          }
+        });
+
         BillVerificationSheet.show(
           context,
-          response: sampleResponse,
+          response: response,
           onRetake: () => Navigator.pop(context),
           onConfirm: (targetReport) {
             context.read<AuditBloc>().add(SetAuditReportEvent(targetReport));
@@ -85,7 +111,14 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
             );
           },
         );
-      });
+        return;
+      }
+    } catch (_) {
+      // Backend offline or error: proceed to local sample fallback
+    }
+
+    if (mounted) {
+      _analyzeSampleCase(widget.caseId);
     }
   }
 
@@ -203,7 +236,6 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
               _analyzeSampleCase(widget.caseId);
             },
             child: const Text('Демо-режим'),
-          ),
           ),
         ],
       ),
