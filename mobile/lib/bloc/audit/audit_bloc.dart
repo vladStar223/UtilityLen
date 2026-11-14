@@ -24,15 +24,23 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
   }
 
   AuditState _buildLoadedState(ComparisonReport report) {
-    const history = [
-      ReceiptHistoryItem(
+    final history = [
+      if (report.summary.prevTotal > 0)
+        ReceiptHistoryItem(
+          id: 'rec_prev',
+          period: report.summary.prevPeriod.isNotEmpty ? report.summary.prevPeriod : 'Прошлый месяц',
+          totalAmount: report.summary.prevTotal,
+          providerName: 'Примводоканал · ДЭК',
+          hasOverpayment: false,
+        ),
+      const ReceiptHistoryItem(
         id: 'rec_2026_10',
         period: 'Октябрь 2026',
         totalAmount: 5420.00,
         providerName: 'Примводоканал · ДЭК',
         hasOverpayment: false,
       ),
-      ReceiptHistoryItem(
+      const ReceiptHistoryItem(
         id: 'rec_2026_09',
         period: 'Сентябрь 2026',
         totalAmount: 5200.00,
@@ -40,7 +48,7 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
         hasOverpayment: true,
         overpaymentAmount: 686.56,
       ),
-      ReceiptHistoryItem(
+      const ReceiptHistoryItem(
         id: 'rec_2026_08',
         period: 'Август 2026',
         totalAmount: 5100.00,
@@ -58,32 +66,33 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
       MonthlyTrendItem(monthLabel: 'Ноя', amount: 6890.5),
     ];
 
-    final overpaymentAmount = report.anomalies.isNotEmpty
-        ? report.anomalies.first.impactRub
-        : 245.18;
-    final overpaymentDesc = report.anomalies.isNotEmpty
-        ? report.anomalies.first.hint
-        : 'Возможная переплата за ХВС с коэффициентом 1.5';
+    final hasAnomalies = report.anomalies.isNotEmpty;
+    final topAnomaly = hasAnomalies ? report.anomalies.first : null;
+    final overpaymentAmount = topAnomaly?.impactRub ?? 0.0;
+    final overpaymentDesc = topAnomaly?.hint ?? 'Все начисления соответствуют нормативам.';
+    final overpaymentTitle = topAnomaly?.title ?? 'Отклонений не найдено';
 
-    final alerts = [
-      AlertNotificationItem(
-        id: 'alert_critical_1',
-        title: '1 критическая проблема',
-        description: overpaymentDesc,
-        severity: 'critical',
-        amount: overpaymentAmount,
-      ),
+    final alerts = <AlertNotificationItem>[
+      if (hasAnomalies)
+        AlertNotificationItem(
+          id: 'alert_critical_1',
+          title: overpaymentTitle,
+          description: overpaymentDesc,
+          severity: 'critical',
+          amount: overpaymentAmount,
+        )
+      else
+        const AlertNotificationItem(
+          id: 'alert_norm_ok',
+          title: 'Начисления в норме',
+          description: 'По всем услугам отклонений от нормативов не найдено',
+          severity: 'success',
+        ),
       const AlertNotificationItem(
         id: 'alert_meter_warning',
         title: 'Срок поверки счётчика',
         description: 'Поверка истекает через 2 месяца',
         severity: 'warning',
-      ),
-      const AlertNotificationItem(
-        id: 'alert_norm_ok',
-        title: 'Начисления в норме',
-        description: 'По остальным услугам отклонений не найдено',
-        severity: 'success',
       ),
       const AlertNotificationItem(
         id: 'alert_protection',
@@ -96,6 +105,7 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
     return state.copyWith(
       status: AuditStatus.loaded,
       report: report,
+      selectedPeriod: report.summary.currPeriod.isNotEmpty ? report.summary.currPeriod : state.selectedPeriod,
       history: history,
       monthlyTrends: trends,
       alerts: alerts,

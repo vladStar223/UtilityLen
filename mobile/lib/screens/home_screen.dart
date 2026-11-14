@@ -26,13 +26,16 @@ class HomeScreen extends StatelessWidget {
     return BlocBuilder<AuditBloc, AuditState>(
       builder: (context, state) {
         final report = state.report;
-        final currentAmount = report?.summary.currTotal ?? 6890.50;
-        final previousAmount = report?.summary.prevTotal ?? 5420.00;
-        final deltaPercent = report?.summary.deltaPct ?? 27.1;
-        final deltaAmount = report?.summary.deltaAbs ?? 1470.50;
-        final overpayment = report?.anomalies.isNotEmpty == true
-            ? report!.anomalies.first.impactRub
-            : 245.18;
+        final hasReport = report != null;
+        final currentAmount = hasReport ? report.summary.currTotal : 0.0;
+        final previousAmount = hasReport ? report.summary.prevTotal : 0.0;
+        final deltaPercent = hasReport ? report.summary.deltaPct : 0.0;
+        final deltaAmount = hasReport ? report.summary.deltaAbs : 0.0;
+        final hasAnomaly = hasReport && report.anomalies.isNotEmpty;
+        final topAnomaly = hasAnomaly ? report.anomalies.first : null;
+        final overpayment = topAnomaly?.impactRub ?? 0.0;
+        final anomalyTitle = topAnomaly?.title ?? 'Начисления в норме';
+        final anomalySubtitle = topAnomaly?.hint ?? 'Переплат и нарушений нормативов не обнаружено.';
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -154,8 +157,8 @@ class HomeScreen extends StatelessWidget {
                   // Anomaly alert banner
                   AnomalyBanner(
                     amount: overpayment,
-                    title: 'Обнаружена возможная переплата',
-                    subtitle: 'Применён повышающий коэффициент 1,5 по ХВС. Требуется проверка.',
+                    title: anomalyTitle,
+                    subtitle: anomalySubtitle,
                     onTap: () => _openAnomalyModal(context, overpayment),
                   ),
                   const SizedBox(height: 18),
@@ -317,8 +320,10 @@ class HomeScreen extends StatelessWidget {
 
                   // Receipt history row
                   _buildReceiptTile(
-                    month: 'Октябрь 2026',
-                    amount: '5 420,00 ₽',
+                    month: state.history.isNotEmpty ? state.history.first.period : 'Октябрь 2026',
+                    amount: state.history.isNotEmpty
+                        ? '${state.history.first.totalAmount.toStringAsFixed(2).replaceAll('.', ',')} ₽'
+                        : '5 420,00 ₽',
                     onTap: onNavigateToReceipts,
                   ),
                   const SizedBox(height: 16),
