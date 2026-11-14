@@ -7,6 +7,7 @@ import 'bloc/chat/chat_bloc.dart';
 import 'bloc/profile/profile_bloc.dart';
 import 'core/api_client.dart';
 import 'core/theme.dart';
+import 'screens/main_scaffold.dart';
 import 'screens/onboarding_screen.dart';
 
 void main() {
@@ -49,7 +50,7 @@ class UtilityLensApp extends StatelessWidget {
         title: 'UtilityLens',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
-        home: const OnboardingScreen(),
+        home: const MainScaffold(),
       ),
     );
   }

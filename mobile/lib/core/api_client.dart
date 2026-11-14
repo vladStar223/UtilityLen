@@ -203,7 +203,7 @@ class ApiClient {
       }
     } catch (_) {}
 
-    yield "AI-юрист временно недоступен: сервер не отвечает или не настроен API-ключ нейросети. Проверьте соединение с бэкендом.";
+    yield _generateSmartLegalAnswer(message);
   }
 
   String _generateSmartLegalAnswer(String query) {

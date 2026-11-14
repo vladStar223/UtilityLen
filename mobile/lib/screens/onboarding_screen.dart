@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/permission_service.dart';
 import '../core/theme.dart';
 import '../widgets/receipt_upload_bottom_sheet.dart';
+import 'main_scaffold.dart';
 import 'receipt_viewer_screen.dart';
 import 'scanner_screen.dart';
 
@@ -120,18 +121,40 @@ class OnboardingScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              TextButton(
-                onPressed: () {
-                  ReceiptUploadBottomSheet.show(context);
-                },
-                child: const Text(
-                  'Пример квитанции →',
-                  style: TextStyle(
-                    color: AppColors.primaryLight,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      ReceiptUploadBottomSheet.show(context);
+                    },
+                    child: const Text(
+                      'Образцы квитанций',
+                      style: TextStyle(
+                        color: AppColors.primaryLight,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
+                  const Text(' · ', style: TextStyle(color: Colors.white38)),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const MainScaffold()),
+                      );
+                    },
+                    child: const Text(
+                      'Войти в приложение →',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
             ],

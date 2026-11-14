@@ -79,10 +79,24 @@ class PermissionService {
 
   /// Сделать снимок квитанции камерой с проверкой разрешений
   static Future<XFile?> takeReceiptPhoto(BuildContext context) async {
-    final hasPermission = await requestCameraPermission(context);
-    if (!hasPermission) return null;
-
     try {
+      final status = await Permission.camera.status;
+      if (!status.isGranted && !status.isLimited) {
+        final result = await Permission.camera.request();
+        if (!result.isGranted && !result.isLimited && context.mounted) {
+          // Показываем предупреждение только если перманентно запрещено
+          if (result.isPermanentlyDenied) {
+            _showPermissionDeniedDialog(
+              context: context,
+              title: 'Требуется доступ к камере',
+              message:
+                  'Для съемки квитанции ЖКХ разрешите приложению доступ к камере в настройках.',
+              isPermanentlyDenied: true,
+            );
+          }
+        }
+      }
+
       final picked = await _picker.pickImage(
         source: ImageSource.camera,
         maxWidth: 1600,
@@ -103,11 +117,8 @@ class PermissionService {
     }
   }
 
-  /// Выбрать изображение квитанции из галереи с проверкой разрешений
+  /// Выбрать изображение квитанции из галереи (Photo Picker не требует runtime-прав на Android 13+)
   static Future<XFile?> pickReceiptFromGallery(BuildContext context) async {
-    final hasPermission = await requestStoragePermission(context);
-    if (!hasPermission) return null;
-
     try {
       final picked = await _picker.pickImage(
         source: ImageSource.gallery,

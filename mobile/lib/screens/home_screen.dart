@@ -3,14 +3,17 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/audit/audit_bloc.dart';
 import '../bloc/audit/audit_event.dart';
 import '../bloc/audit/audit_state.dart';
+import '../core/permission_service.dart';
 import '../core/theme.dart';
 import '../widgets/anomaly_banner.dart';
 import '../widgets/anomaly_bottom_sheet.dart';
 import '../widgets/hero_bill_card.dart';
+import '../widgets/receipt_upload_bottom_sheet.dart';
 import 'ai_chat_screen.dart';
 import 'alerts_screen.dart';
 import 'bill_details_screen.dart';
 import 'claim_screen.dart';
+import 'receipt_viewer_screen.dart';
 import 'scanner_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -33,6 +36,16 @@ class HomeScreen extends StatelessWidget {
 
         return Scaffold(
           backgroundColor: AppColors.background,
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () => ReceiptUploadBottomSheet.show(context),
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.document_scanner_rounded),
+            label: const Text(
+              'Сканировать',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
           body: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -79,12 +92,9 @@ class HomeScreen extends StatelessWidget {
                               color: AppColors.primary,
                               size: 24,
                             ),
-                            tooltip: 'Сфотографировать квитанцию',
+                            tooltip: 'Сфотографировать или загрузить квитанцию',
                             onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const ScannerScreen()),
-                              );
+                              ReceiptUploadBottomSheet.show(context);
                             },
                           ),
                           Stack(
@@ -156,7 +166,127 @@ class HomeScreen extends StatelessWidget {
                     icon: const Icon(Icons.auto_awesome_rounded, size: 20),
                     label: const Text('Разобраться с проблемой'),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 14),
+
+                  // Quick Action Card: Проверить новую квитанцию
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryLight,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.document_scanner_rounded,
+                                color: AppColors.primary,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Проверить новую квитанцию',
+                                    style: TextStyle(
+                                      color: AppColors.textPrimary,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Факторный аудит по фото, скану или образцу',
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  final picked = await PermissionService.takeReceiptPhoto(context);
+                                  if (picked != null && context.mounted) {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ReceiptViewerScreen(
+                                          filePath: picked.path,
+                                          title: 'Снимок с камеры',
+                                          provider: 'Сфотографированная квитанция',
+                                          address: 'г. Владивосток',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.camera_alt_rounded, size: 16),
+                                label: const Text('Камера', style: TextStyle(fontSize: 13)),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () async {
+                                  final picked = await PermissionService.pickReceiptFromGallery(context);
+                                  if (picked != null && context.mounted) {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ReceiptViewerScreen(
+                                          filePath: picked.path,
+                                          title: 'Квитанция из галереи',
+                                          provider: 'Квитанция ЖКХ (из галереи)',
+                                          address: 'г. Владивосток',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.photo_library_rounded, size: 16),
+                                label: const Text('Галерея', style: TextStyle(fontSize: 13)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
 
                   // Recent receipts section
                   Row(
