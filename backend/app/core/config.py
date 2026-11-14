@@ -69,7 +69,7 @@ class Settings:
         )
         self.LLM_MODEL: str = os.getenv(
             "LLM_MODEL",
-            "deepseek-v4-pro-tunnelcode",
+            "claude-sonnet-4.6-tunnelcode",
         )
         self.VISION_LLM_MODEL: str = os.getenv(
             "VISION_LLM_MODEL",

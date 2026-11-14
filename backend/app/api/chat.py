@@ -149,5 +149,9 @@ def chat_stream(
     return StreamingResponse(
         generate_stream(payload.comparison_id, payload.message, payload.history, owner_id),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
