@@ -230,14 +230,20 @@ async def _stream_llm(
         "temperature": 0.2,
     }
 
+    logger.info("[Chat LLM] Initiating streaming request to %s (model: %s, timeout: %.1fs)", url, model, timeout)
+    chunk_count = 0
+    token_count = 0
+    first_lines: List[str] = []
+
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             async with client.stream("POST", url, json=payload, headers=headers) as resp:
+                logger.info("[Chat LLM] Received HTTP %d from %s", resp.status_code, url)
                 if resp.status_code >= 400:
                     err_body = await resp.aread()
                     err_text = err_body.decode("utf-8", errors="replace")
                     logger.warning(
-                        "LLM stream returned HTTP %d for '%s' (model: '%s'): %s",
+                        "[Chat LLM] Stream error HTTP %d for '%s' (model: '%s'): %s",
                         resp.status_code,
                         url,
                         model,
@@ -248,23 +254,36 @@ async def _stream_llm(
                     if not raw_line:
                         continue
                     line = raw_line.strip()
+                    if len(first_lines) < 3:
+                        first_lines.append(line)
                     if not line.startswith("data:"):
                         continue
                     data_str = line[len("data:"):].strip()
                     if data_str == "[DONE]":
+                        logger.info("[Chat LLM] Received [DONE] signal from stream")
                         break
                     try:
                         chunk = json.loads(data_str)
+                        chunk_count += 1
                         choices = chunk.get("choices", [])
                         if choices:
                             delta = choices[0].get("delta", {})
-                            token = delta.get("content", "")
+                            token = delta.get("content") or delta.get("reasoning_content") or ""
                             if token:
+                                token_count += 1
                                 yield token
-                    except Exception:
+                    except Exception as parse_err:
+                        logger.debug("[Chat LLM] Failed to parse SSE chunk: %s", parse_err)
                         continue
+
+        logger.info(
+            "[Chat LLM] Stream finished. Chunks: %d, tokens yielded: %d (first line: '%s')",
+            chunk_count,
+            token_count,
+            first_lines[0] if first_lines else "None",
+        )
     except Exception as exc:
-        logger.warning("LLM streaming call failed (%s), falling back to offline answer.", exc)
+        logger.warning("[Chat LLM] Stream exception (%s): %s", type(exc).__name__, exc)
         return
 
 
@@ -296,11 +315,13 @@ async def _call_llm(
             "model": model,
             "messages": messages,
         }
+        logger.info("[Chat LLM] Calling non-streaming fallback to %s (model: %s)", url, model)
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, json=payload, headers=headers)
+            logger.info("[Chat LLM] Non-streaming response HTTP %d", resp.status_code)
             if resp.status_code >= 400:
                 logger.warning(
-                    "LLM call returned HTTP %d for '%s' (model: '%s'): %s",
+                    "[Chat LLM] Non-streaming error HTTP %d for '%s' (model: '%s'): %s",
                     resp.status_code,
                     url,
                     model,
@@ -308,10 +329,12 @@ async def _call_llm(
                 )
                 return None
             data = resp.json()
-        content = data.get("choices", [{}])[0].get("message", {}).get("content")
+        choice = data.get("choices", [{}])[0]
+        msg = choice.get("message", {})
+        content = msg.get("content") or msg.get("reasoning_content")
         return content or None
     except Exception as exc:
-        logger.warning("LLM call exception for '%s': %s", url, exc)
+        logger.warning("[Chat LLM] Non-streaming exception for '%s': %s", url, exc)
         return None
 
 
@@ -329,8 +352,10 @@ async def generate_stream(
 
     Event types emitted: ``tool_call``, ``token`` and ``done``.
     """
+    logger.info("[Chat] generate_stream started: comparison_id='%s', message='%s'", comparison_id, message)
     record = tools.get_report(comparison_id, owner_id)
     if record is None:
+        logger.warning("[Chat] Comparison record '%s' not found for owner '%s'", comparison_id, owner_id)
         yield sse_event(
             {"type": "token", "content": "Отчет не найден. Сначала выполните сравнение квитанций."}
         )
@@ -354,8 +379,15 @@ async def generate_stream(
         "</USER_DATA>"
     )
 
-    api_key, url, _, _ = _get_llm_credentials()
+    api_key, url, _, model = _get_llm_credentials()
+    logger.info(
+        "[Chat] Credentials: has_api_key=%s, url='%s', model='%s'",
+        bool(api_key),
+        url,
+        model,
+    )
     if not api_key:
+        logger.warning("[Chat] No API key configured. Emitting unavailable message.")
         yield sse_event({
             "type": "token",
             "content": "AI-юрист временно недоступен: на сервере не настроен API-ключ нейросети (GPTUNNEL_API_KEY). Укажите действующий ключ в файле .env для подключения языковой модели.",
@@ -368,22 +400,34 @@ async def generate_stream(
     # 1. Try real SSE streaming from LLM if configured
     if url:
         try:
+            tokens_emitted = 0
             async for token in _stream_llm(SYSTEM_PROMPT, data_context, message, history):
                 stream_successful = True
+                tokens_emitted += 1
                 yield sse_event({"type": "token", "content": token})
+            logger.info("[Chat] Streaming phase finished. Total tokens emitted: %d", tokens_emitted)
         except Exception as exc:
-            logger.warning("Stream attempt exception: %s", exc)
+            logger.warning("[Chat] Stream attempt exception: %s", exc)
 
-    # 2. If stream yielded no tokens, fall back to _call_llm
+    # 2. If stream yielded no tokens, fall back to _call_llm or smart fallback
     if not stream_successful:
+        logger.info("[Chat] Stream yielded 0 tokens. Attempting non-streaming fallback...")
         llm_answer = await _call_llm(SYSTEM_PROMPT, data_context, message, history)
         if llm_answer:
+            logger.info("[Chat] Non-streaming LLM succeeded with %d characters. Emitting chunks...", len(llm_answer))
             for chunk in _chunks(llm_answer):
                 yield sse_event({"type": "token", "content": chunk})
         else:
-            yield sse_event({
-                "type": "token",
-                "content": "AI-юрист временно недоступен: шлюз языковой модели (GPTunnel) не ответил на запрос. Пожалуйста, проверьте баланс или статус провайдера.",
-            })
+            logger.info("[Chat] LLM unavailable. Using smart legal knowledge-base answer.")
+            answer = build_fallback_answer(report, message)
+            if answer:
+                for chunk in _chunks(answer):
+                    yield sse_event({"type": "token", "content": chunk})
+            else:
+                yield sse_event({
+                    "type": "token",
+                    "content": "AI-юрист временно недоступен: шлюз языковой модели (GPTunnel) не ответил на запрос. Пожалуйста, проверьте баланс или статус провайдера.",
+                })
 
     yield sse_event({"type": "done"})
+    logger.info("[Chat] generate_stream completed for comparison_id='%s'", comparison_id)
