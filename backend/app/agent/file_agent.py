@@ -128,15 +128,42 @@ def _normalize_chat_url(raw_url: Optional[str]) -> str:
     return cleaned
 
 
-def _normalize_model_name(raw_model: Optional[str], default: str = "gpt-4o-mini") -> str:
+def _normalize_model_name(raw_model: Optional[str], default: str = "deepseek-v4-pro-tunnelcode") -> str:
     if not raw_model:
         return default
-    m = raw_model.strip()
-    if m.startswith("gptunnel/"):
-        m = m[len("gptunnel/"):]
-    if "deepseek" in m.lower():
-        return "gpt-4o-mini"
-    return m
+    return raw_model.strip()
+
+
+def _get_model_candidates(primary_model: str, is_vision: bool = False) -> List[str]:
+    candidates = [primary_model]
+    if primary_model.startswith("gptunnel/"):
+        candidates.append(primary_model.removeprefix("gptunnel/"))
+    else:
+        candidates.append(f"gptunnel/{primary_model}")
+
+    if is_vision:
+        fallbacks = [
+            "gemini-3.7-flash",
+            "gemini-3.5-flash-tunnelcode",
+            "gpt-5.5-tunnelcode",
+            "gemini-3-flash",
+            "gpt-4o-mini",
+        ]
+    else:
+        fallbacks = [
+            "deepseek-v4-pro-tunnelcode",
+            "gemini-3.7-flash",
+            "gemini-3.5-flash-tunnelcode",
+            "gpt-5.5-tunnelcode",
+            "deepseek-v4-flash-tunnelcode",
+            "gpt-4o-mini",
+        ]
+    for fb in fallbacks:
+        if fb not in candidates:
+            candidates.append(fb)
+        if f"gptunnel/{fb}" not in candidates:
+            candidates.append(f"gptunnel/{fb}")
+    return candidates
 
 
 class BillAnalysisAgent:
@@ -163,9 +190,9 @@ class BillAnalysisAgent:
 
         raw_model = (
             os.getenv("LLM_MODEL")
-            or getattr(settings, "LLM_MODEL", "deepseek-v3")
+            or getattr(settings, "LLM_MODEL", "deepseek-v4-pro-tunnelcode")
         )
-        model = _normalize_model_name(raw_model, default="deepseek-v3")
+        model = _normalize_model_name(raw_model, default="deepseek-v4-pro-tunnelcode")
         return api_key if api_key else None, url, model
 
     @classmethod
@@ -193,31 +220,32 @@ class BillAnalysisAgent:
         }
 
         timeout = float(os.getenv("LLM_TIMEOUT_S", "45.0"))
-        logger.info("[Text LLM] Sending document text (%d chars) to %s (model: '%s')", len(text_content), url, model)
+        candidates = _get_model_candidates(model, is_vision=False)
+        logger.info("[Text LLM] Sending document text (%d chars) to %s (candidates: %s)", len(text_content), url, candidates[:3])
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            if resp.status_code == 400 and "response_format" in payload:
-                # Retry without strict json_object for models that do not support it (e.g. DeepSeek on GPTunnel)
-                payload.pop("response_format", None)
+            resp = None
+            for target_model in candidates:
+                payload["model"] = target_model
                 resp = await client.post(url, json=payload, headers=headers)
-            if resp.status_code == 404 and payload.get("model") != "gpt-4o-mini":
-                logger.warning(
-                    "[Text LLM] Model '%s' returned 404 at %s: %s. Retrying with 'gpt-4o-mini'...",
-                    model,
-                    url,
-                    resp.text,
-                )
-                payload["model"] = "gpt-4o-mini"
-                payload.pop("response_format", None)
-                resp = await client.post(url, json=payload, headers=headers)
-            if resp.status_code >= 400:
-                logger.warning(
-                    "[Text LLM Error] HTTP %d from %s (model: '%s'): %s",
-                    resp.status_code,
-                    url,
-                    payload.get("model"),
-                    resp.text,
-                )
+                if resp.status_code == 400 and "response_format" in payload:
+                    # Retry without strict json_object for models that do not support it
+                    payload.pop("response_format", None)
+                    resp = await client.post(url, json=payload, headers=headers)
+                if resp.status_code == 404:
+                    logger.warning("[Text LLM] Model '%s' returned 404: %s. Trying next...", target_model, resp.text)
+                    continue
+                if resp.status_code >= 400:
+                    logger.warning(
+                        "[Text LLM Error] HTTP %d from %s (model: '%s'): %s",
+                        resp.status_code,
+                        url,
+                        target_model,
+                        resp.text,
+                    )
+                    resp.raise_for_status()
+                break
+            if resp is None:
+                raise ValueError("No reachable LLM model found on GPTunnel")
             resp.raise_for_status()
             data = resp.json()
 
@@ -246,20 +274,12 @@ class BillAnalysisAgent:
             logger.warning("[Vision OCR] No API key available")
             return None
 
-        # Multimodal Vision models: must support image_url (e.g. gpt-4o-mini, gpt-4o).
-        # DeepSeek is text-only and does not support image_url.
         raw_vision = (
             os.getenv("VISION_LLM_MODEL")
-            or getattr(settings, "VISION_LLM_MODEL", "gpt-4o-mini")
-            or "gpt-4o-mini"
+            or getattr(settings, "VISION_LLM_MODEL", "gemini-3.7-flash")
+            or "gemini-3.7-flash"
         ).strip()
-        vision_model = raw_vision[len("gptunnel/"):] if raw_vision.startswith("gptunnel/") else raw_vision
-        if "deepseek" in vision_model.lower():
-            logger.warning(
-                "[Vision OCR] Model '%s' is text-only and cannot process images. Switching to 'gpt-4o-mini'.",
-                vision_model,
-            )
-            vision_model = "gpt-4o-mini"
+        vision_model = _normalize_model_name(raw_vision, default="gemini-3.7-flash")
 
         b64_img = base64.b64encode(image_bytes).decode("ascii")
 
@@ -290,38 +310,44 @@ class BillAnalysisAgent:
         }
 
         timeout = float(os.getenv("LLM_TIMEOUT_S", "45.0"))
+        candidates = _get_model_candidates(vision_model, is_vision=True)
         logger.info(
-            "[Vision OCR] Sending receipt image (%d bytes, mime: %s) to %s (model: '%s')",
+            "[Vision OCR] Sending receipt image (%d bytes, mime: %s) to %s (candidates: %s)",
             len(image_bytes),
             mime_type,
             url,
-            vision_model,
+            candidates[:4],
         )
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            if resp.status_code == 400 and "response_format" in payload:
-                # Retry without strict json_object for models that do not support it
-                logger.info("[Vision OCR] HTTP 400 with json_object. Retrying without response_format...")
-                payload.pop("response_format", None)
+            resp = None
+            for target_model in candidates:
+                payload["model"] = target_model
                 resp = await client.post(url, json=payload, headers=headers)
-            if resp.status_code == 404 and payload.get("model") != "gpt-4o-mini":
-                logger.warning(
-                    "[Vision OCR] Model '%s' returned 404 at %s: %s. Retrying with 'gpt-4o-mini'...",
-                    vision_model,
-                    url,
-                    resp.text,
-                )
-                payload["model"] = "gpt-4o-mini"
-                payload.pop("response_format", None)
-                resp = await client.post(url, json=payload, headers=headers)
-            if resp.status_code >= 400:
-                logger.warning(
-                    "[Vision OCR Error] HTTP %d from %s (model: '%s'): %s",
-                    resp.status_code,
-                    url,
-                    payload.get("model"),
-                    resp.text,
-                )
+                if resp.status_code == 400 and "response_format" in payload:
+                    # Retry without strict json_object for models that do not support it
+                    logger.info("[Vision OCR] HTTP 400 with json_object. Retrying without response_format...")
+                    payload.pop("response_format", None)
+                    resp = await client.post(url, json=payload, headers=headers)
+                if resp.status_code == 404:
+                    logger.warning(
+                        "[Vision OCR] Model '%s' returned 404: %s. Trying next candidate...",
+                        target_model,
+                        resp.text,
+                    )
+                    continue
+                if resp.status_code >= 400:
+                    logger.warning(
+                        "[Vision OCR Error] HTTP %d from %s (model: '%s'): %s",
+                        resp.status_code,
+                        url,
+                        target_model,
+                        resp.text,
+                    )
+                    resp.raise_for_status()
+                break
+
+            if resp is None:
+                raise ValueError("No reachable Vision LLM model found on GPTunnel")
             resp.raise_for_status()
             data = resp.json()
 

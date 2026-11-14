@@ -61,24 +61,50 @@ def _normalize_chat_url(raw_url: Optional[str]) -> Optional[str]:
     return cleaned
 
 
-def _normalize_model_name(raw_model: Optional[str], default: str = "gpt-4o-mini") -> str:
+def _normalize_model_name(raw_model: Optional[str], default: str = "deepseek-v4-pro-tunnelcode") -> str:
     if not raw_model:
         return default
-    m = raw_model.strip()
-    if m.startswith("gptunnel/"):
-        m = m[len("gptunnel/"):]
-    if "deepseek" in m.lower():
-        # Fall back to gpt-4o-mini if DeepSeek is not available or non-existent on account
-        return "gpt-4o-mini"
-    return m
+    return raw_model.strip()
+
+
+def _get_model_candidates(primary_model: str, is_vision: bool = False) -> List[str]:
+    candidates = [primary_model]
+    if primary_model.startswith("gptunnel/"):
+        candidates.append(primary_model.removeprefix("gptunnel/"))
+    else:
+        candidates.append(f"gptunnel/{primary_model}")
+
+    if is_vision:
+        fallbacks = [
+            "gemini-3.7-flash",
+            "gemini-3.5-flash-tunnelcode",
+            "gpt-5.5-tunnelcode",
+            "gemini-3-flash",
+            "gpt-4o-mini",
+        ]
+    else:
+        fallbacks = [
+            "deepseek-v4-pro-tunnelcode",
+            "gemini-3.7-flash",
+            "gemini-3.5-flash-tunnelcode",
+            "gpt-5.5-tunnelcode",
+            "deepseek-v4-flash-tunnelcode",
+            "gpt-4o-mini",
+        ]
+    for fb in fallbacks:
+        if fb not in candidates:
+            candidates.append(fb)
+        if f"gptunnel/{fb}" not in candidates:
+            candidates.append(f"gptunnel/{fb}")
+    return candidates
 
 
 def _get_llm_credentials():
     api_key = os.getenv("LLM_API_KEY") or os.getenv("GPTUNNEL_API_KEY")
     url = _normalize_chat_url(os.getenv("LLM_API_URL") or os.getenv("GPTUNNEL_BASE_URL"))
     timeout = float(os.getenv("LLM_TIMEOUT_S", "35.0"))
-    raw_model = os.getenv("LLM_MODEL", "gpt-4o-mini").strip()
-    model = _normalize_model_name(raw_model, default="gpt-4o-mini")
+    raw_model = os.getenv("LLM_MODEL", "deepseek-v4-pro-tunnelcode").strip()
+    model = _normalize_model_name(raw_model, default="deepseek-v4-pro-tunnelcode")
     return api_key if api_key else None, url, timeout, model
 
 
@@ -241,28 +267,28 @@ async def _stream_llm(
         "temperature": 0.2,
     }
 
-    logger.info("[Chat LLM] Initiating streaming request to %s (model: %s, timeout: %.1fs)", url, model, timeout)
+    candidates = _get_model_candidates(model, is_vision=False)
+    logger.info("[Chat LLM] Initiating streaming request to %s (primary: %s, candidates: %s)", url, model, candidates[:4])
     chunk_count = 0
     token_count = 0
     first_lines: List[str] = []
     collected_tokens: List[str] = []
+    success_model = None
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            target_model = model
-            for attempt in range(2):
+            for target_model in candidates:
                 payload["model"] = target_model
                 async with client.stream("POST", url, json=payload, headers=headers) as resp:
                     logger.info("[Chat LLM] Received HTTP %d from %s (model: %s)", resp.status_code, url, target_model)
-                    if resp.status_code == 404 and target_model != "gpt-4o-mini" and attempt == 0:
+                    if resp.status_code == 404:
                         err_body = await resp.aread()
                         err_text = err_body.decode("utf-8", errors="replace")
                         logger.warning(
-                            "[Chat LLM] Stream error HTTP 404 for model '%s': %s. Retrying stream with 'gpt-4o-mini'...",
+                            "[Chat LLM] Model '%s' returned 404: %s. Trying next candidate...",
                             target_model,
                             err_text,
                         )
-                        target_model = "gpt-4o-mini"
                         continue
                     if resp.status_code >= 400:
                         err_body = await resp.aread()
@@ -275,6 +301,7 @@ async def _stream_llm(
                             err_text,
                         )
                         return
+                    success_model = target_model
                     async for raw_line in resp.aiter_lines():
                         if not raw_line:
                             continue
@@ -303,14 +330,15 @@ async def _stream_llm(
                             continue
                     break
 
-        full_deepseek_text = "".join(collected_tokens)
+        full_llm_text = "".join(collected_tokens)
         logger.info(
-            "[Chat LLM] Stream finished. Chunks: %d, tokens: %d",
+            "[Chat LLM] Stream finished. Model: %s, chunks: %d, tokens: %d",
+            success_model or "none",
             chunk_count,
             token_count,
         )
-        if full_deepseek_text:
-            logger.info("[Chat LLM Output] Ответ модели (%s):\n%s", target_model, full_deepseek_text)
+        if full_llm_text:
+            logger.info("[Chat LLM Output] Ответ модели (%s):\n%s", success_model, full_llm_text)
         else:
             logger.warning("[Chat LLM Output] Модель вернула 0 токенов (first line: '%s')", first_lines[0] if first_lines else "None")
     except Exception as exc:
@@ -346,27 +374,28 @@ async def _call_llm(
             "model": model,
             "messages": messages,
         }
-        logger.info("[Chat LLM] Calling non-streaming fallback to %s (model: %s)", url, model)
+        candidates = _get_model_candidates(model, is_vision=False)
+        logger.info("[Chat LLM] Calling non-streaming fallback to %s (candidates: %s)", url, candidates[:4])
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            logger.info("[Chat LLM] Non-streaming response HTTP %d", resp.status_code)
-            if resp.status_code == 404 and model != "gpt-4o-mini":
-                logger.warning(
-                    "[Chat LLM] Model '%s' returned 404 at %s: %s. Retrying with 'gpt-4o-mini'...",
-                    model,
-                    url,
-                    resp.text,
-                )
-                payload["model"] = "gpt-4o-mini"
+            resp = None
+            for target_model in candidates:
+                payload["model"] = target_model
                 resp = await client.post(url, json=payload, headers=headers)
-            if resp.status_code >= 400:
-                logger.warning(
-                    "[Chat LLM] Non-streaming error HTTP %d for '%s' (model: '%s'): %s",
-                    resp.status_code,
-                    url,
-                    payload.get("model"),
-                    resp.text,
-                )
+                logger.info("[Chat LLM] Non-streaming response HTTP %d for model '%s'", resp.status_code, target_model)
+                if resp.status_code == 404:
+                    logger.warning("[Chat LLM] Model '%s' returned 404: %s. Trying next...", target_model, resp.text)
+                    continue
+                if resp.status_code >= 400:
+                    logger.warning(
+                        "[Chat LLM] Non-streaming error HTTP %d for '%s' (model: '%s'): %s",
+                        resp.status_code,
+                        url,
+                        target_model,
+                        resp.text,
+                    )
+                    return None
+                break
+            if resp is None or resp.status_code >= 400:
                 return None
             data = resp.json()
         choice = data.get("choices", [{}])[0]
