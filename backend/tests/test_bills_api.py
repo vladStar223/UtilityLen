@@ -156,6 +156,17 @@ async def test_upload_bill_invalid_json(db):
 
 
 @pytest.mark.anyio
+async def test_upload_bill_non_utility_json_rejected(db):
+    """Test uploading arbitrary non-utility JSON raises 400 with helpful error."""
+    arbitrary = json.dumps({"arbitrary_field": "some_value"}).encode("utf-8")
+    upload = MockUploadFile("not_a_bill.json", arbitrary, "application/json")
+    with pytest.raises(HTTPException) as exc_info:
+        await upload_bill(file=upload, db=db, user=None)
+    assert exc_info.value.status_code == 400
+    assert "не является квитанцией жкх" in str(exc_info.value.detail).lower()
+
+
+@pytest.mark.anyio
 async def test_get_bills_history(db, sample_bill_data):
     """Test GET /api/v1/bills/history returns the list of uploaded bills."""
     file_bytes = json.dumps(sample_bill_data).encode("utf-8")

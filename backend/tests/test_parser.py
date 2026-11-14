@@ -4,7 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -338,3 +338,49 @@ async def test_document_parser_unsupported_format():
 
     with pytest.raises(ValueError, match="Unsupported file format: archive.zip"):
         await DocumentParser.parse_file(b"content", "archive.zip")
+
+
+@pytest.mark.anyio
+async def test_document_parser_rejects_non_utility_pdf():
+    """Verify PDF with non-utility content is rejected with helpful error."""
+    resume_text = "Резюме разработчика Python. Опыт работы в IT 5 лет. Навыки: Docker, Kubernetes, Linux."
+    with patch.object(PdfBillParser, "_extract_text", return_value=resume_text):
+        with pytest.raises(ValueError, match="не является квитанцией ЖКХ"):
+            await DocumentParser.parse_file(b"dummy pdf bytes", "resume.pdf")
+
+
+@pytest.mark.anyio
+async def test_document_parser_rejects_non_utility_json():
+    """Verify JSON with arbitrary data is rejected."""
+    arbitrary_json = json.dumps({"user": "john", "city": "Vladivostok"}).encode("utf-8")
+    with pytest.raises(ValueError, match="не является квитанцией ЖКХ"):
+        await DocumentParser.parse_file(arbitrary_json, "data.json")
+
+
+@pytest.mark.anyio
+async def test_vision_parser_rejects_non_utility_image():
+    """Verify Vision LLM response with is_utility_bill=False raises ValueError."""
+    from app.agent.file_agent import BillAnalysisAgent
+
+    mock_response = {
+        "choices": [
+            {
+                "message": {
+                    "content": json.dumps({
+                        "is_utility_bill": False,
+                        "error": "На фото кот, а не квитанция ЖКХ."
+                    })
+                }
+            }
+        ]
+    }
+
+    with patch.object(BillAnalysisAgent, "_get_api_credentials", return_value=("fake_key", "http://fake/v1/chat/completions", "model")):
+        with patch("httpx.AsyncClient.post") as mock_post:
+            mock_post.return_value = MagicMock(
+                status_code=200,
+                json=lambda: mock_response,
+                raise_for_status=lambda: None,
+            )
+            with pytest.raises(ValueError, match="На фото кот, а не квитанция ЖКХ"):
+                await BillAnalysisAgent.analyze_document(b"fake image", "cat.png", "image/png")

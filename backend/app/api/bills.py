@@ -194,6 +194,14 @@ async def upload_bill(
             filename=file.filename or "bill",
             mime_type=file.content_type or "",
         )
+    except ValueError as exc:
+        logger.warning("Invalid bill document '%s': %s", file.filename, exc)
+        err_msg = str(exc)
+        detail_msg = err_msg if "не удалось" in err_msg.lower() else f"Не удалось обработать квитанцию: {err_msg}"
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail_msg,
+        )
     except Exception as exc:
         logger.warning("Failed to parse bill file '%s': %s", file.filename, exc)
         raise HTTPException(
