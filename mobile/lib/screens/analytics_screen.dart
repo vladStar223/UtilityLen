@@ -30,6 +30,76 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 MonthlyTrendItem(monthLabel: 'Ноя', amount: 6890.5),
               ];
 
+        final report = state.report;
+        final deltaPct = report?.summary.deltaPct ?? 0.0;
+        final deltaAbs = report?.summary.deltaAbs ?? 0.0;
+        final isIncrease = deltaPct >= 0;
+        final sign = isIncrease ? '+' : '';
+        final pctColor = (deltaPct == 0.0)
+            ? AppColors.textPrimary
+            : (deltaPct > 0 ? AppColors.critical : AppColors.success);
+
+        final anomalies = report?.anomalies ?? [];
+        final items = report?.items ?? [];
+
+        final String box1Title;
+        final String box1Change;
+        final String box1Sub;
+        final String box1Emoji;
+        final Color box1Color;
+        final Color box1BgColor;
+
+        if (anomalies.isNotEmpty) {
+          final anom = anomalies.first;
+          box1Emoji = '⚠️';
+          box1Title = anom.title.length > 22 ? '${anom.title.substring(0, 20)}...' : anom.title;
+          box1Change = '+${anom.impactRub.toStringAsFixed(0)} ₽';
+          box1Sub = anom.hint.length > 28 ? '${anom.hint.substring(0, 26)}...' : anom.hint;
+          box1Color = AppColors.critical;
+          box1BgColor = AppColors.criticalLight;
+        } else if (items.isNotEmpty) {
+          final it = items.first;
+          box1Emoji = it.category.contains('heat') ? '🔥' : '💧';
+          box1Title = it.displayName.length > 20 ? '${it.displayName.substring(0, 18)}...' : it.displayName;
+          final itSign = it.deltaPct >= 0 ? '+' : '';
+          box1Change = '$itSign${it.deltaPct.toStringAsFixed(0)}%';
+          box1Sub = '$itSign${it.deltaAbs.toStringAsFixed(0)} ₽';
+          box1Color = it.deltaPct > 0 ? AppColors.warning : AppColors.success;
+          box1BgColor = AppColors.warningLight;
+        } else {
+          box1Emoji = '✅';
+          box1Title = 'Начисления';
+          box1Change = '0%';
+          box1Sub = 'В норме';
+          box1Color = AppColors.success;
+          box1BgColor = AppColors.successLight;
+        }
+
+        final String box2Title;
+        final String box2Change;
+        final String box2Sub;
+        final String box2Emoji;
+        final Color box2Color;
+        final Color box2BgColor;
+
+        if (items.length > 1) {
+          final it2 = items[1];
+          box2Emoji = it2.category.contains('drain') ? '🌊' : (it2.category.contains('elec') ? '⚡' : '🏠');
+          box2Title = it2.displayName.length > 20 ? '${it2.displayName.substring(0, 18)}...' : it2.displayName;
+          final itSign = it2.deltaPct >= 0 ? '+' : '';
+          box2Change = '$itSign${it2.deltaPct.toStringAsFixed(0)}%';
+          box2Sub = '$itSign${it2.deltaAbs.toStringAsFixed(0)} ₽';
+          box2Color = it2.deltaPct > 0 ? AppColors.warning : AppColors.success;
+          box2BgColor = AppColors.warningLight;
+        } else {
+          box2Emoji = '⚖️';
+          box2Title = 'Тарифы';
+          box2Change = 'Норматив';
+          box2Sub = 'Без нарушений';
+          box2Color = AppColors.primary;
+          box2BgColor = AppColors.primaryLight;
+        }
+
         return Scaffold(
           backgroundColor: AppColors.background,
           appBar: AppBar(
@@ -95,17 +165,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
-                      '+27,1%',
+                    Text(
+                      '$sign${deltaPct.toStringAsFixed(1)}%',
                       style: TextStyle(
-                        color: AppColors.success,
+                        color: pctColor,
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const Text(
-                      'к предыдущему периоду',
-                      style: TextStyle(
+                    Text(
+                      deltaAbs != 0.0
+                          ? 'к предыдущему периоду ($sign${deltaAbs.toStringAsFixed(2).replaceAll('.', ',')} ₽)'
+                          : 'к предыдущему периоду (без изменений)',
+                      style: const TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 12,
                       ),
@@ -140,23 +212,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 children: [
                   Expanded(
                     child: _buildTrendBox(
-                      emoji: '🔥',
-                      title: 'Отопление',
-                      changeText: '+38%',
-                      subtitle: 'в ноябре',
-                      color: AppColors.warning,
-                      bgColor: AppColors.warningLight,
+                      emoji: box1Emoji,
+                      title: box1Title,
+                      changeText: box1Change,
+                      subtitle: box1Sub,
+                      color: box1Color,
+                      bgColor: box1BgColor,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildTrendBox(
-                      emoji: '💧',
-                      title: 'Холодная вода',
-                      changeText: '+127%',
-                      subtitle: 'включен коэфф. 1,5!',
-                      color: AppColors.critical,
-                      bgColor: AppColors.criticalLight,
+                      emoji: box2Emoji,
+                      title: box2Title,
+                      changeText: box2Change,
+                      subtitle: box2Sub,
+                      color: box2Color,
+                      bgColor: box2BgColor,
                     ),
                   ),
                 ],

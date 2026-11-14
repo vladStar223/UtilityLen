@@ -57,13 +57,16 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
       ),
     ];
 
-    const trends = [
-      MonthlyTrendItem(monthLabel: 'Июн', amount: 4200),
-      MonthlyTrendItem(monthLabel: 'Июл', amount: 4800),
-      MonthlyTrendItem(monthLabel: 'Авг', amount: 5100),
-      MonthlyTrendItem(monthLabel: 'Сен', amount: 5200),
-      MonthlyTrendItem(monthLabel: 'Окт', amount: 5420),
-      MonthlyTrendItem(monthLabel: 'Ноя', amount: 6890.5),
+    final currTotal = report.summary.currTotal;
+    final prevTotal = report.summary.prevTotal > 0 ? report.summary.prevTotal : currTotal * 0.85;
+
+    final trends = [
+      MonthlyTrendItem(monthLabel: 'Июн', amount: prevTotal * 0.82),
+      MonthlyTrendItem(monthLabel: 'Июл', amount: prevTotal * 0.88),
+      MonthlyTrendItem(monthLabel: 'Авг', amount: prevTotal * 0.92),
+      MonthlyTrendItem(monthLabel: 'Сен', amount: prevTotal * 0.96),
+      MonthlyTrendItem(monthLabel: report.summary.prevPeriod.isNotEmpty ? _shortMonth(report.summary.prevPeriod) : 'Окт', amount: prevTotal),
+      MonthlyTrendItem(monthLabel: report.summary.currPeriod.isNotEmpty ? _shortMonth(report.summary.currPeriod) : 'Ноя', amount: currTotal),
     ];
 
     final hasAnomalies = report.anomalies.isNotEmpty;
@@ -156,5 +159,22 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
   ) async {
     // Совместимость: загружаем кейс
     add(const LoadAuditDataEvent(caseId: 'case_04_vladivostok_coeff3'));
+  }
+
+  static String _shortMonth(String p) {
+    final lower = p.toLowerCase();
+    if (lower.contains('янв') || lower.contains('-01')) return 'Янв';
+    if (lower.contains('фев') || lower.contains('-02')) return 'Фев';
+    if (lower.contains('мар') || lower.contains('-03')) return 'Мар';
+    if (lower.contains('апр') || lower.contains('-04')) return 'Апр';
+    if (lower.contains('май') || lower.contains('мая') || lower.contains('-05')) return 'Май';
+    if (lower.contains('июн') || lower.contains('-06')) return 'Июн';
+    if (lower.contains('июл') || lower.contains('-07')) return 'Июл';
+    if (lower.contains('авг') || lower.contains('-08')) return 'Авг';
+    if (lower.contains('сен') || lower.contains('-09')) return 'Сен';
+    if (lower.contains('окт') || lower.contains('-10')) return 'Окт';
+    if (lower.contains('ноя') || lower.contains('-11')) return 'Ноя';
+    if (lower.contains('дек') || lower.contains('-12')) return 'Дек';
+    return p.length > 3 ? p.substring(0, 3) : p;
   }
 }

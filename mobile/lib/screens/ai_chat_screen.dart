@@ -98,30 +98,41 @@ class _AiChatScreenState extends State<AiChatScreen> {
           return Column(
             children: [
               // Attached receipt context badge
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.attach_file_rounded, color: AppColors.primary, size: 18),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Подключена квитанция: Ноябрь 2026, 6 890,50 ₽',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+              Builder(
+                builder: (ctx) {
+                  final activeReport = context.watch<AuditBloc>().state.report;
+                  final periodStr = activeReport?.summary.currPeriod.isNotEmpty == true
+                      ? activeReport!.summary.currPeriod
+                      : 'Текущий месяц';
+                  final sumStr = activeReport != null
+                      ? '${activeReport.summary.currTotal.toStringAsFixed(2).replaceAll('.', ',')} ₽'
+                      : '6 890,50 ₽';
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.card,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.border),
                     ),
-                  ],
-                ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.attach_file_rounded, color: AppColors.primary, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Подключена квитанция: $periodStr, $sumStr',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
 
               // Messages list
