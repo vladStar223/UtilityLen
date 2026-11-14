@@ -49,14 +49,25 @@ _ANOMALY_LAW_REF: Dict[str, str] = {
     "OPTIONAL_SERVICE_DETECTED": "ст. 16 ЗоЗПП РФ, ч. 2 ст. 154 ЖК РФ",
 }
 
+def _normalize_chat_url(raw_url: Optional[str]) -> Optional[str]:
+    if not raw_url:
+        return None
+    cleaned = raw_url.strip().rstrip("/")
+    if not cleaned.endswith("/chat/completions"):
+        if cleaned.endswith("/v1"):
+            cleaned = f"{cleaned}/chat/completions"
+        else:
+            cleaned = f"{cleaned}/v1/chat/completions"
+    return cleaned
+
+
 def _get_llm_credentials():
     api_key = os.getenv("LLM_API_KEY") or os.getenv("GPTUNNEL_API_KEY")
-    url = os.getenv("LLM_API_URL")
-    if not url and os.getenv("GPTUNNEL_BASE_URL"):
-        base = os.getenv("GPTUNNEL_BASE_URL", "").rstrip("/")
-        url = f"{base}/chat/completions" if not base.endswith("/chat/completions") else base
+    url = _normalize_chat_url(os.getenv("LLM_API_URL") or os.getenv("GPTUNNEL_BASE_URL"))
     timeout = float(os.getenv("LLM_TIMEOUT_S", "35.0"))
-    model = os.getenv("LLM_MODEL", "gptunnel/deepseek-v4-pro-tunnelcode")
+    raw_model = os.getenv("LLM_MODEL", "deepseek-v4-pro").strip()
+    # Normalize model: strip 'gptunnel/' prefix if present
+    model = raw_model[len("gptunnel/"):] if raw_model.startswith("gptunnel/") else raw_model
     return api_key if api_key else None, url, timeout, model
 
 
@@ -223,7 +234,15 @@ async def _stream_llm(
         async with httpx.AsyncClient(timeout=timeout) as client:
             async with client.stream("POST", url, json=payload, headers=headers) as resp:
                 if resp.status_code >= 400:
-                    logger.warning("LLM stream returned HTTP %d, falling back", resp.status_code)
+                    err_body = await resp.aread()
+                    err_text = err_body.decode("utf-8", errors="replace")
+                    logger.warning(
+                        "LLM stream returned HTTP %d for '%s' (model: '%s'): %s",
+                        resp.status_code,
+                        url,
+                        model,
+                        err_text,
+                    )
                     return
                 async for raw_line in resp.aiter_lines():
                     if not raw_line:
@@ -279,11 +298,20 @@ async def _call_llm(
         }
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
+            if resp.status_code >= 400:
+                logger.warning(
+                    "LLM call returned HTTP %d for '%s' (model: '%s'): %s",
+                    resp.status_code,
+                    url,
+                    model,
+                    resp.text,
+                )
+                return None
             data = resp.json()
         content = data.get("choices", [{}])[0].get("message", {}).get("content")
         return content or None
-    except Exception:
+    except Exception as exc:
+        logger.warning("LLM call exception for '%s': %s", url, exc)
         return None
 
 
