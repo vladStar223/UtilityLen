@@ -20,9 +20,8 @@ import httpx
 
 from app.agent.parser import JsonBillParser, PdfBillParser, VisionBillParser
 from app.core.config import settings
+from app.core.logging import logger
 from app.core.models import BillDocument, ServiceLine
-
-logger = logging.getLogger(__name__)
 
 AUDITOR_SYSTEM_PROMPT = """Вы — профессиональный финансовый аудитор в сфере жилищно-коммунального хозяйства (ЖКХ) Российской Федерации.
 Ваша задача — провести детальный финансовый аудит квитанции/счета за коммунальные услуги и безошибочно извлечь структурированные данные.
@@ -108,12 +107,150 @@ def _clean_json_markdown(text: str) -> str:
     return clean.strip()
 
 
-def _unwrap_envelope(data: Dict[str, Any]) -> Dict[str, Any]:
+def _unwrap_envelope(data: Any) -> Dict[str, Any]:
     """Unwrap common nested wrapper keys from JSON response."""
-    for envelope_key in ("bill", "curr_bill", "prev_bill", "document", "data", "result"):
+    if not isinstance(data, dict):
+        return {}
+    if "services" in data or "total_amount" in data or "period" in data:
+        return data
+    for envelope_key in (
+        "bill", "curr_bill", "prev_bill", "document", "data", "result",
+        "receipt", "invoice", "utility_bill", "bill_document", "output", "response"
+    ):
         if envelope_key in data and isinstance(data[envelope_key], dict):
-            return data[envelope_key]
+            nested = data[envelope_key]
+            if any(k in nested for k in ("services", "total_amount", "period", "address")):
+                return nested
+    for v in data.values():
+        if isinstance(v, dict) and any(k in v for k in ("services", "total_amount", "period")):
+            return v
     return data
+
+
+def _normalize_bill_dict(data: Any) -> Dict[str, Any]:
+    """Sanitize and normalize raw dictionary into a valid BillDocument payload."""
+    if not isinstance(data, dict):
+        raise ValueError("Модель вернула некорректный ответ (не словарь JSON).")
+
+    is_utility = data.get("is_utility_bill")
+    if is_utility in (False, "false", "False", "0", 0) or str(is_utility).lower() == "false":
+        err = data.get("error") or "Загруженное изображение не является квитанцией ЖКХ."
+        raise ValueError(err)
+
+    unwrapped = _unwrap_envelope(data)
+
+    is_utility = unwrapped.get("is_utility_bill")
+    if is_utility in (False, "false", "False", "0", 0) or str(is_utility).lower() == "false":
+        err = unwrapped.get("error") or "Загруженное изображение не является квитанцией ЖКХ."
+        raise ValueError(err)
+
+    key_mapping = {
+        "период": "period",
+        "расчетный_период": "period",
+        "billing_period": "period",
+        "month": "period",
+        "адрес": "address",
+        "город_улица_дом": "address",
+        "итого": "total_amount",
+        "сумма": "total_amount",
+        "к_оплате": "total_amount",
+        "начислено": "total_amount",
+        "total": "total_amount",
+        "amount": "total_amount",
+        "услуги": "services",
+        "начисления": "services",
+        "service_lines": "services",
+        "lines": "services",
+        "items": "services",
+        "поставщик": "provider_name",
+        "ук": "provider_name",
+        "организация": "provider_name",
+        "лицевой_счет": "personal_account",
+        "лс": "personal_account",
+        "account": "personal_account",
+        "account_number": "personal_account",
+    }
+    for alt_key, standard_key in key_mapping.items():
+        if alt_key in unwrapped and standard_key not in unwrapped:
+            unwrapped[standard_key] = unwrapped[alt_key]
+
+    raw_services = unwrapped.get("services")
+    if not isinstance(raw_services, list):
+        raw_services = []
+
+    clean_services = []
+    for s in raw_services:
+        if not isinstance(s, dict):
+            continue
+        s_code = s.get("service_code") or s.get("code") or "other"
+        s_name = s.get("raw_name") or s.get("name") or s.get("display_name") or s.get("наименование") or str(s_code)
+        s_unit = s.get("unit") or s.get("единица") or "руб"
+        try:
+            s_vol = float(s.get("volume") or s.get("объем") or 1.0)
+        except (ValueError, TypeError):
+            s_vol = 1.0
+        try:
+            s_tar = float(s.get("tariff") or s.get("тариф") or 0.0)
+        except (ValueError, TypeError):
+            s_tar = 0.0
+        try:
+            s_tot = float(s.get("total") or s.get("итого") or s.get("сумма") or (s_vol * s_tar if s_tar > 0 else 0.0))
+        except (ValueError, TypeError):
+            s_tot = 0.0
+        try:
+            s_coeff = float(s.get("coefficient") or s.get("коэффициент") or 1.0)
+        except (ValueError, TypeError):
+            s_coeff = 1.0
+        try:
+            s_recalc = float(s.get("recalculation") or s.get("перерасчет") or 0.0)
+        except (ValueError, TypeError):
+            s_recalc = 0.0
+        try:
+            s_penalty = float(s.get("penalty") or s.get("пени") or 0.0)
+        except (ValueError, TypeError):
+            s_penalty = 0.0
+
+        clean_services.append({
+            "service_code": str(s_code),
+            "raw_name": str(s_name),
+            "unit": str(s_unit),
+            "volume": s_vol,
+            "tariff": s_tar,
+            "coefficient": s_coeff,
+            "recalculation": s_recalc,
+            "penalty": s_penalty,
+            "total": s_tot,
+        })
+
+    if not clean_services:
+        raise ValueError(
+            "На изображении не удалось распознать коммунальные услуги и суммы начислений. "
+            "Пожалуйста, сделайте более четкое фото квитанции, где видна таблица начислений (ХВС, ГВС, отопление, свет)."
+        )
+
+    unwrapped["services"] = clean_services
+
+    if not unwrapped.get("total_amount"):
+        calc_total = sum(s["total"] for s in clean_services)
+        unwrapped["total_amount"] = round(calc_total, 2)
+    else:
+        try:
+            unwrapped["total_amount"] = float(unwrapped["total_amount"])
+        except (ValueError, TypeError):
+            calc_total = sum(s["total"] for s in clean_services)
+            unwrapped["total_amount"] = round(calc_total, 2)
+
+    if not unwrapped.get("period"):
+        from datetime import datetime
+        unwrapped["period"] = datetime.now().strftime("%Y-%m")
+
+    if not unwrapped.get("address"):
+        unwrapped["address"] = "г. Владивосток"
+
+    if not unwrapped.get("bill_id"):
+        unwrapped["bill_id"] = f"bill-vision-{uuid4().hex[:8]}"
+
+    return unwrapped
 
 
 def _normalize_chat_url(raw_url: Optional[str]) -> str:
@@ -146,23 +283,18 @@ def _get_model_candidates(primary_model: str, is_vision: bool = False) -> List[s
             "gemini-3.7-flash",
             "gemini-3.5-flash-tunnelcode",
             "gpt-5.5-tunnelcode",
-            "gemini-3-flash",
             "gpt-4o-mini",
         ]
     else:
         fallbacks = [
             "deepseek-v4-pro-tunnelcode",
             "gemini-3.7-flash",
-            "gemini-3.5-flash-tunnelcode",
             "gpt-5.5-tunnelcode",
-            "deepseek-v4-flash-tunnelcode",
             "gpt-4o-mini",
         ]
     for fb in fallbacks:
         if fb not in candidates:
             candidates.append(fb)
-        if f"gptunnel/{fb}" not in candidates:
-            candidates.append(f"gptunnel/{fb}")
     return candidates
 
 
@@ -219,18 +351,25 @@ class BillAnalysisAgent:
             "Content-Type": "application/json",
         }
 
-        timeout = float(os.getenv("LLM_TIMEOUT_S", "45.0"))
+        timeout = float(os.getenv("LLM_TIMEOUT_S", "25.0"))
         candidates = _get_model_candidates(model, is_vision=False)
         logger.info("[Text LLM] Sending document text (%d chars) to %s (candidates: %s)", len(text_content), url, candidates[:3])
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = None
-            for target_model in candidates:
+            for idx, target_model in enumerate(candidates):
                 payload["model"] = target_model
-                resp = await client.post(url, json=payload, headers=headers)
-                if resp.status_code == 400 and "response_format" in payload:
-                    # Retry without strict json_object for models that do not support it
-                    payload.pop("response_format", None)
+                logger.info("[Text LLM] Trying model '%s' (%d/%d)...", target_model, idx + 1, len(candidates))
+                try:
                     resp = await client.post(url, json=payload, headers=headers)
+                except httpx.TimeoutException:
+                    logger.warning("[Text LLM] Timeout for model '%s', trying next...", target_model)
+                    continue
+                if resp.status_code == 400 and "response_format" in payload:
+                    payload.pop("response_format", None)
+                    try:
+                        resp = await client.post(url, json=payload, headers=headers)
+                    except httpx.TimeoutException:
+                        continue
                 if resp.status_code == 404:
                     logger.warning("[Text LLM] Model '%s' returned 404: %s. Trying next...", target_model, resp.text)
                     continue
@@ -243,6 +382,7 @@ class BillAnalysisAgent:
                         resp.text,
                     )
                     resp.raise_for_status()
+                logger.info("[Text LLM] Model '%s' responded successfully (HTTP %d)", target_model, resp.status_code)
                 break
             if resp is None or resp.status_code >= 400:
                 err_msg = resp.text if resp is not None else "no response"
@@ -252,21 +392,12 @@ class BillAnalysisAgent:
             data = resp.json()
 
         content = data["choices"][0]["message"]["content"]
-        logger.info("[Text LLM Output] Received response (%d characters)", len(content))
+        logger.info("[Text LLM Output Text]:\n%s", content)
         cleaned = _clean_json_markdown(content)
         parsed = json.loads(cleaned)
-        unwrapped = _unwrap_envelope(parsed)
+        normalized = _normalize_bill_dict(parsed)
 
-        if unwrapped.get("is_utility_bill") is False:
-            raise ValueError(
-                unwrapped.get("error")
-                or "Загруженный документ не является квитанцией ЖКХ. Пожалуйста, загрузите квитанцию или счет за коммунальные услуги."
-            )
-
-        if not unwrapped.get("bill_id"):
-            unwrapped["bill_id"] = f"bill-ai-{uuid4().hex[:8]}"
-
-        return BillDocument.model_validate(unwrapped)
+        return BillDocument.model_validate(normalized)
 
     @classmethod
     async def _call_llm_vision(cls, image_bytes: bytes, mime_type: str) -> Optional[BillDocument]:
@@ -311,25 +442,32 @@ class BillAnalysisAgent:
             "Content-Type": "application/json",
         }
 
-        timeout = float(os.getenv("LLM_TIMEOUT_S", "45.0"))
+        timeout = float(os.getenv("LLM_TIMEOUT_S", "25.0"))
         candidates = _get_model_candidates(vision_model, is_vision=True)
         logger.info(
             "[Vision OCR] Sending receipt image (%d bytes, mime: %s) to %s (candidates: %s)",
             len(image_bytes),
             mime_type,
             url,
-            candidates[:4],
+            candidates,
         )
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = None
-            for target_model in candidates:
+            for idx, target_model in enumerate(candidates):
                 payload["model"] = target_model
-                resp = await client.post(url, json=payload, headers=headers)
+                logger.info("[Vision OCR] Trying model '%s' (%d/%d)...", target_model, idx + 1, len(candidates))
+                try:
+                    resp = await client.post(url, json=payload, headers=headers)
+                except httpx.TimeoutException:
+                    logger.warning("[Vision OCR] Timeout for model '%s', trying next...", target_model)
+                    continue
                 if resp.status_code == 400 and "response_format" in payload:
-                    # Retry without strict json_object for models that do not support it
                     logger.info("[Vision OCR] HTTP 400 with json_object. Retrying without response_format...")
                     payload.pop("response_format", None)
-                    resp = await client.post(url, json=payload, headers=headers)
+                    try:
+                        resp = await client.post(url, json=payload, headers=headers)
+                    except httpx.TimeoutException:
+                        continue
                 if resp.status_code == 404:
                     logger.warning(
                         "[Vision OCR] Model '%s' returned 404: %s. Trying next candidate...",
@@ -346,6 +484,7 @@ class BillAnalysisAgent:
                         resp.text,
                     )
                     resp.raise_for_status()
+                logger.info("[Vision OCR] Model '%s' responded successfully (HTTP %d)", target_model, resp.status_code)
                 break
 
             if resp is None or resp.status_code >= 400:
@@ -356,31 +495,21 @@ class BillAnalysisAgent:
             data = resp.json()
 
         content = data["choices"][0]["message"]["content"]
-        logger.info("[Vision OCR Output] Received response (%d characters)", len(content))
+        logger.info("[Vision OCR Raw Text]:\n%s", content)
         cleaned = _clean_json_markdown(content)
         parsed = json.loads(cleaned)
-        unwrapped = _unwrap_envelope(parsed)
+        normalized = _normalize_bill_dict(parsed)
 
         logger.info(
-            "[Vision OCR Parsed] is_utility_bill=%s, provider='%s', account='%s', period='%s', services=%d, total=%.2f",
-            unwrapped.get("is_utility_bill"),
-            unwrapped.get("provider_name"),
-            unwrapped.get("personal_account"),
-            unwrapped.get("period"),
-            len(unwrapped.get("services") or []),
-            unwrapped.get("total_amount") or 0.0,
+            "[Vision OCR Parsed] provider='%s', account='%s', period='%s', services=%d, total=%.2f",
+            normalized.get("provider_name"),
+            normalized.get("personal_account"),
+            normalized.get("period"),
+            len(normalized.get("services") or []),
+            normalized.get("total_amount") or 0.0,
         )
 
-        if unwrapped.get("is_utility_bill") is False:
-            raise ValueError(
-                unwrapped.get("error")
-                or "Загруженное изображение не является квитанцией ЖКХ. Пожалуйста, сфотографируйте квитанцию так, чтобы была видна таблица начислений."
-            )
-
-        if not unwrapped.get("bill_id"):
-            unwrapped["bill_id"] = f"bill-vision-{uuid4().hex[:8]}"
-
-        return BillDocument.model_validate(unwrapped)
+        return BillDocument.model_validate(normalized)
 
     @classmethod
     async def analyze_document(

@@ -85,7 +85,9 @@ class PermissionService {
     try {
       final picked = await _picker.pickImage(
         source: ImageSource.camera,
-        imageQuality: 95,
+        maxWidth: 1600,
+        maxHeight: 2048,
+        imageQuality: 85,
       );
       return picked;
     } catch (e) {
@@ -109,7 +111,9 @@ class PermissionService {
     try {
       final picked = await _picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 95,
+        maxWidth: 1600,
+        maxHeight: 2048,
+        imageQuality: 85,
       );
       return picked;
     } catch (e) {
