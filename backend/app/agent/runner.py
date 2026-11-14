@@ -14,9 +14,8 @@ import re
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from app.agent import tools
+from app.core.logging import logger
 from app.core.models import ComparisonReport
-
-logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
     "Вы — опытный юрист по жилищному праву Российской Федерации, "
