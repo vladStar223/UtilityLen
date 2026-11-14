@@ -73,7 +73,7 @@ class Settings:
         )
         self.VISION_LLM_MODEL: str = os.getenv(
             "VISION_LLM_MODEL",
-            "gemini-3.7-flash",
+            "claude-sonnet-4.6-tunnelcode",
         )
 
         # API authentication (MVP). Empty string disables the check.

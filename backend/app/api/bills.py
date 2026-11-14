@@ -254,7 +254,7 @@ async def upload_bill(
     if not account:
         warnings.append("Лицевой счет абонента не распознан")
 
-    provider = getattr(bill_doc, "provider_name", None) or "КГУП «Примводоканал»"
+    provider = getattr(bill_doc, "provider_name", None)
 
     services_sum = sum(float(s.total) for s in bill_doc.services)
     if abs(services_sum - float(bill_doc.total_amount)) > 2.0:

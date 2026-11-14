@@ -81,18 +81,24 @@ def _get_model_candidates(primary_model: str, is_vision: bool = False) -> List[s
 
     if is_vision:
         fallbacks = [
+            "claude-sonnet-4.6-tunnelcode",
             "gemini-3.7-flash",
-            "gemini-3.5-flash",
-            "deepseek-v4-flash-vision",
-            "gpt-4o-mini",
-            "gpt-4o",
+            "gemini-3.8-flash",
+            "gemini-3.5-flash-tunnelcode",
+            "gpt-5.5-tunnelcode",
+            "gpt-5.5-pro",
+            "qwen-3.7-max-tunnelcode",
+            "qwen-3.7-plus-tunnelcode",
         ]
     else:
         fallbacks = [
             "deepseek-v4-pro-tunnelcode",
+            "deepseek-v4-flash-tunnelcode",
+            "claude-sonnet-4.6-tunnelcode",
+            "qwen-3.7-max-tunnelcode",
             "gemini-3.7-flash",
-            "gemini-3.5-flash",
-            "gpt-4o-mini",
+            "gemini-3.8-flash",
+            "gpt-5.5-tunnelcode",
         ]
     for fb in fallbacks:
         if fb not in candidates:
@@ -297,13 +303,13 @@ async def _stream_llm(
                         err_body = await resp.aread()
                         err_text = err_body.decode("utf-8", errors="replace")
                         logger.warning(
-                            "[Chat LLM] Stream error HTTP %d for '%s' (model: '%s'): %s",
+                            "[Chat LLM] Stream error HTTP %d for '%s' (model: '%s'): %s. Trying next candidate...",
                             resp.status_code,
                             url,
                             target_model,
                             err_text,
                         )
-                        return
+                        continue
                     success_model = target_model
                     async for raw_line in resp.aiter_lines():
                         if not raw_line:
@@ -331,7 +337,10 @@ async def _stream_llm(
                         except Exception as parse_err:
                             logger.debug("[Chat LLM] Failed to parse SSE chunk: %s", parse_err)
                             continue
-                    break
+
+                    if token_count > 0:
+                        break
+                    logger.warning("[Chat LLM] Model '%s' stream yielded 0 tokens. Trying next candidate...", target_model)
 
         full_llm_text = "".join(collected_tokens)
         logger.info(
@@ -396,19 +405,18 @@ async def _call_llm(
                         target_model,
                         resp.text,
                     )
-                    return None
-                break
-            if resp is None or resp.status_code >= 400:
-                return None
-            data = resp.json()
-        choice = data.get("choices", [{}])[0]
-        msg = choice.get("message", {})
-        content = msg.get("content") or msg.get("reasoning_content")
-        if content:
-            logger.info("[Chat LLM Output] Ответ модели (non-streaming):\n%s", content)
-        else:
-            logger.warning("[Chat LLM Output] Модель вернула пустой content в non-streaming! Ответ: %s", data)
-        return content or None
+                    continue
+
+                data = resp.json()
+                choice = data.get("choices", [{}])[0]
+                msg = choice.get("message", {})
+                content = msg.get("content") or msg.get("reasoning_content")
+                if content:
+                    logger.info("[Chat LLM Output] Ответ модели (non-streaming, %s):\n%s", target_model, content)
+                    return content
+                logger.warning("[Chat LLM Output] Модель '%s' вернула пустой content в non-streaming! Ответ: %s", target_model, data)
+
+            return None
     except Exception as exc:
         logger.warning("[Chat LLM] Non-streaming exception for '%s': %s", url, exc)
         return None
@@ -463,11 +471,16 @@ async def generate_stream(
         model,
     )
     if not api_key:
-        logger.warning("[Chat] No API key configured. Emitting unavailable message.")
-        yield sse_event({
-            "type": "token",
-            "content": "AI-юрист временно недоступен: на сервере не настроен API-ключ нейросети (GPTUNNEL_API_KEY). Укажите действующий ключ в файле .env для подключения языковой модели.",
-        })
+        logger.info("[Chat] No API key configured. Using offline legal knowledge-base answer.")
+        answer = build_fallback_answer(report, message)
+        if answer:
+            for chunk in _chunks(answer):
+                yield sse_event({"type": "token", "content": chunk})
+        else:
+            yield sse_event({
+                "type": "token",
+                "content": "AI-юрист временно недоступен: на сервере не настроен API-ключ нейросети (GPTUNNEL_API_KEY). Укажите действующий ключ в файле .env для подключения языковой модели.",
+            })
         yield sse_event({"type": "done"})
         return
 

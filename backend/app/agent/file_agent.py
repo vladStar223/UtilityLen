@@ -317,7 +317,13 @@ def _normalize_bill_dict(data: Any) -> Dict[str, Any]:
 
     # Resolve total_amount
     total_val = 0.0
-    raw_tot = unwrapped.get("total_amount") or unwrapped.get("total") or unwrapped.get("amount")
+    raw_tot = (
+        unwrapped.get("total_amount")
+        or unwrapped.get("total")
+        or unwrapped.get("amount")
+        or unwrapped.get("итого")
+        or unwrapped.get("к_оплате")
+    )
     if raw_tot:
         try:
             total_val = float(raw_tot)
@@ -325,20 +331,23 @@ def _normalize_bill_dict(data: Any) -> Dict[str, Any]:
             total_val = 0.0
 
     if not clean_services:
-        # User requested: accept without strict required fields if it looks like a receipt!
-        if total_val <= 0.0:
-            total_val = 3500.0  # reasonable fallback utility payment
-        clean_services = [{
-            "service_code": "other",
-            "raw_name": "Коммунальные услуги (начисление)",
-            "unit": "усл",
-            "volume": 1.0,
-            "tariff": total_val,
-            "coefficient": 1.0,
-            "recalculation": 0.0,
-            "penalty": 0.0,
-            "total": total_val,
-        }]
+        if total_val > 0.0:
+            clean_services = [{
+                "service_code": "other",
+                "raw_name": "Коммунальные услуги (начисление)",
+                "unit": "усл",
+                "volume": 1.0,
+                "tariff": total_val,
+                "coefficient": 1.0,
+                "recalculation": 0.0,
+                "penalty": 0.0,
+                "total": total_val,
+            }]
+        else:
+            raise ValueError(
+                "На изображении не удалось различить коммунальные услуги или сумму к оплате. "
+                "Пожалуйста, сделайте более четкое фото квитанции, где видна таблица начислений (ХВС, ГВС, отопление, свет)."
+            )
 
     unwrapped["services"] = clean_services
 
@@ -355,23 +364,24 @@ def _normalize_bill_dict(data: Any) -> Dict[str, Any]:
     unwrapped["period"] = _normalize_period_str(unwrapped.get("period"))
 
     if not unwrapped.get("address"):
-        unwrapped["address"] = "г. Владивосток"
+        unwrapped["address"] = "Адрес не указан"
 
     if not unwrapped.get("provider_name"):
         service_codes_set = {s["service_code"] for s in clean_services}
         if "capital_repair" in service_codes_set:
             unwrapped["provider_name"] = "Фонд капитального ремонта многоквартирных домов Приморского края"
-        elif "heating" in service_codes_set or any("дэк" in str(s["raw_name"]).lower() for s in clean_services):
+        elif "heating" in service_codes_set or any("дэк" in str(s.get("raw_name", "")).lower() for s in clean_services):
             unwrapped["provider_name"] = "ПАО «ДЭК» (филиал «Дальэнергосбыт») / АО «ДГК»"
         elif "cold_water" in service_codes_set and "cold_water_soi" not in service_codes_set:
             unwrapped["provider_name"] = "КГУП «Приморский водоканал»"
-        elif "maintenance" in service_codes_set:
-            unwrapped["provider_name"] = "ООО «Управляющая компания»"
         else:
-            unwrapped["provider_name"] = "ПАО «ДЭК» / КГУП «Примводоканал»"
+            unwrapped["provider_name"] = None
 
-    if not unwrapped.get("personal_account"):
-        unwrapped["personal_account"] = "010001702100519"
+    raw_acc = unwrapped.get("personal_account")
+    if raw_acc:
+        unwrapped["personal_account"] = str(raw_acc).strip()
+    else:
+        unwrapped["personal_account"] = None
 
     if not unwrapped.get("bill_id"):
         unwrapped["bill_id"] = f"bill-vision-{uuid4().hex[:8]}"
@@ -406,18 +416,24 @@ def _get_model_candidates(primary_model: str, is_vision: bool = False) -> List[s
 
     if is_vision:
         fallbacks = [
+            "claude-sonnet-4.6-tunnelcode",
             "gemini-3.7-flash",
-            "gemini-3.5-flash",
-            "deepseek-v4-flash-vision",
-            "gpt-4o-mini",
-            "gpt-4o",
+            "gemini-3.8-flash",
+            "gemini-3.5-flash-tunnelcode",
+            "gpt-5.5-tunnelcode",
+            "gpt-5.5-pro",
+            "qwen-3.7-max-tunnelcode",
+            "qwen-3.7-plus-tunnelcode",
         ]
     else:
         fallbacks = [
             "deepseek-v4-pro-tunnelcode",
+            "deepseek-v4-flash-tunnelcode",
+            "claude-sonnet-4.6-tunnelcode",
+            "qwen-3.7-max-tunnelcode",
             "gemini-3.7-flash",
-            "gemini-3.5-flash",
-            "gpt-4o-mini",
+            "gemini-3.8-flash",
+            "gpt-5.5-tunnelcode",
         ]
     for fb in fallbacks:
         if fb not in candidates:
@@ -469,10 +485,14 @@ class BillAnalysisAgent:
                 {"role": "system", "content": AUDITOR_SYSTEM_PROMPT},
                 {
                     "role": "user",
-                    "content": f"Проведи аудит следующей квитанции ЖКХ и верни структурированный JSON:\n\n{text_content}",
+                    "content": (
+                        "Проведи детальный финансовый аудит следующей квитанции ЖКХ.\n"
+                        "Верни ответ ИСКЛЮЧИТЕЛЬНО в виде валидного JSON-объекта строго по схеме аудитора:\n\n"
+                        f"{text_content}"
+                    ),
                 },
             ],
-            "response_format": {"type": "json_object"},
+            "max_tokens": 4096,
             "temperature": 0.1,
         }
         headers = {
@@ -480,11 +500,12 @@ class BillAnalysisAgent:
             "Content-Type": "application/json",
         }
 
-        timeout = float(os.getenv("LLM_TIMEOUT_S", "25.0"))
+        timeout = float(os.getenv("LLM_TIMEOUT_S", "35.0"))
         candidates = _get_model_candidates(model, is_vision=False)
-        logger.info("[Text LLM] Sending document text (%d chars) to %s (candidates: %s)", len(text_content), url, candidates[:3])
+        logger.info("[Text LLM] Sending document text (%d chars) to %s (candidates: %s)", len(text_content), url, candidates[:4])
+
+        parsed_data: Optional[Dict[str, Any]] = None
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = None
             for idx, target_model in enumerate(candidates):
                 payload["model"] = target_model
                 logger.info("[Text LLM] Trying model '%s' (%d/%d)...", target_model, idx + 1, len(candidates))
@@ -493,12 +514,10 @@ class BillAnalysisAgent:
                 except httpx.TimeoutException:
                     logger.warning("[Text LLM] Timeout for model '%s', trying next...", target_model)
                     continue
-                if resp.status_code == 400 and "response_format" in payload:
-                    payload.pop("response_format", None)
-                    try:
-                        resp = await client.post(url, json=payload, headers=headers)
-                    except httpx.TimeoutException:
-                        continue
+                except Exception as net_err:
+                    logger.warning("[Text LLM] Network error for model '%s': %s. Trying next...", target_model, net_err)
+                    continue
+
                 if resp.status_code == 404:
                     logger.warning("[Text LLM] Model '%s' returned 404: %s. Trying next...", target_model, resp.text)
                     continue
@@ -510,26 +529,30 @@ class BillAnalysisAgent:
                         target_model,
                         resp.text,
                     )
-                    resp.raise_for_status()
-                logger.info("[Text LLM] Model '%s' responded successfully (HTTP %d)", target_model, resp.status_code)
-                break
-            if resp is None or resp.status_code >= 400:
-                err_msg = resp.text if resp is not None else "no response"
-                last_code = getattr(resp, "status_code", "None")
-                logger.error("[Text LLM] Все модели отклонены шлюзом (HTTP %s): %s", last_code, err_msg)
-                raise ValueError(f"Сервис анализа текста квитанции GPTunnel вернул ошибку (HTTP {last_code}: {err_msg})")
-            data = resp.json()
+                    continue
 
-        content = data["choices"][0]["message"]["content"]
-        logger.info("[Text LLM Output Text]:\n%s", content)
-        try:
-            cleaned = _clean_json_markdown(content)
-            parsed = json.loads(cleaned)
-        except Exception as json_err:
-            logger.warning("[Text LLM] Failed to parse JSON from LLM: %s. Using fallback.", json_err)
-            parsed = {}
-        normalized = _normalize_bill_dict(parsed)
+                try:
+                    data = resp.json()
+                    choices = data.get("choices") or []
+                    if not choices:
+                        continue
+                    raw_content = choices[0].get("message", {}).get("content", "") or ""
+                    cleaned = _clean_json_markdown(raw_content)
+                    if not cleaned or cleaned == "{}" or len(cleaned) < 15:
+                        logger.warning("[Text LLM] Model '%s' returned empty or trivial output: '%s'. Trying next...", target_model, raw_content[:150])
+                        continue
+                    cand_parsed = json.loads(cleaned)
+                    if isinstance(cand_parsed, dict):
+                        logger.info("[Text LLM] Model '%s' responded successfully (HTTP %d, %d chars)", target_model, resp.status_code, len(cleaned))
+                        parsed_data = cand_parsed
+                        break
+                except Exception as parse_err:
+                    logger.warning("[Text LLM] Model '%s' JSON parse failed: %s. Trying next...", target_model, parse_err)
+                    continue
 
+        if parsed_data is None:
+            return None
+        normalized = _normalize_bill_dict(parsed_data)
         return BillDocument.model_validate(normalized)
 
     @classmethod
@@ -558,7 +581,14 @@ class BillAnalysisAgent:
                     "content": [
                         {
                             "type": "text",
-                            "text": "Распознай эту квитанцию ЖКХ как финансовый аудитор и верни валидный JSON:",
+                            "text": (
+                                "Внимательно проведи финансовый аудит квитанции ЖКХ на этом изображении.\n"
+                                "Распознай все реквизиты: организацию-поставщика/УК, номер лицевого счета, расчетный период, "
+                                "адрес помещения, таблицу начислений по всем услугам (тарифы, объемы, единицы измерения, итого) "
+                                "и общую сумму к оплате.\n"
+                                "Верни ответ ИСКЛЮЧИТЕЛЬНО в виде валидного JSON-объекта строго по схеме финансового аудитора. "
+                                "Не добавляй никаких вводных слов, пояснений или markdown вне JSON."
+                            ),
                         },
                         {
                             "type": "image_url",
@@ -567,7 +597,7 @@ class BillAnalysisAgent:
                     ],
                 },
             ],
-            "response_format": {"type": "json_object"},
+            "max_tokens": 4096,
             "temperature": 0.1,
         }
         headers = {
@@ -575,7 +605,7 @@ class BillAnalysisAgent:
             "Content-Type": "application/json",
         }
 
-        timeout = float(os.getenv("LLM_TIMEOUT_S", "25.0"))
+        timeout = float(os.getenv("LLM_TIMEOUT_S", "35.0"))
         candidates = _get_model_candidates(vision_model, is_vision=True)
         logger.info(
             "[Vision OCR] Sending receipt image (%d bytes, mime: %s) to %s (candidates: %s)",
@@ -584,23 +614,23 @@ class BillAnalysisAgent:
             url,
             candidates,
         )
+
+        parsed_data: Optional[Dict[str, Any]] = None
+        last_err: str = ""
+
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = None
             for idx, target_model in enumerate(candidates):
                 payload["model"] = target_model
                 logger.info("[Vision OCR] Trying model '%s' (%d/%d)...", target_model, idx + 1, len(candidates))
                 try:
                     resp = await client.post(url, json=payload, headers=headers)
                 except httpx.TimeoutException:
-                    logger.warning("[Vision OCR] Timeout for model '%s', trying next...", target_model)
+                    logger.warning("[Vision OCR] Timeout (%.1fs) for model '%s', trying next candidate...", timeout, target_model)
                     continue
-                if resp.status_code == 400 and "response_format" in payload:
-                    logger.info("[Vision OCR] HTTP 400 with json_object. Retrying without response_format...")
-                    payload.pop("response_format", None)
-                    try:
-                        resp = await client.post(url, json=payload, headers=headers)
-                    except httpx.TimeoutException:
-                        continue
+                except Exception as net_err:
+                    logger.warning("[Vision OCR] Network error for model '%s': %s. Trying next...", target_model, net_err)
+                    continue
+
                 if resp.status_code == 404:
                     logger.warning(
                         "[Vision OCR] Model '%s' returned 404: %s. Trying next candidate...",
@@ -616,26 +646,76 @@ class BillAnalysisAgent:
                         target_model,
                         resp.text,
                     )
-                    resp.raise_for_status()
-                logger.info("[Vision OCR] Model '%s' responded successfully (HTTP %d)", target_model, resp.status_code)
-                break
+                    last_err = f"HTTP {resp.status_code}: {resp.text}"
+                    continue
 
-            if resp is None or resp.status_code >= 400:
-                err_msg = resp.text if resp is not None else "no response"
-                last_code = getattr(resp, "status_code", "None")
-                logger.error("[Vision OCR] Все модели отклонены шлюзом (HTTP %s): %s", last_code, err_msg)
-                raise ValueError(f"Сервис распознавания (Vision) шлюза GPTunnel вернул ошибку (HTTP {last_code}: {err_msg})")
-            data = resp.json()
+                logger.info("[Vision OCR] Model '%s' responded HTTP %d", target_model, resp.status_code)
+                try:
+                    data = resp.json()
+                    choices = data.get("choices") or []
+                    if not choices:
+                        logger.warning("[Vision OCR] Model '%s' returned empty choices. Trying next...", target_model)
+                        continue
 
-        content = data["choices"][0]["message"]["content"]
-        logger.info("[Vision OCR Raw Text]:\n%s", content)
-        try:
-            cleaned = _clean_json_markdown(content)
-            parsed = json.loads(cleaned)
-        except Exception as json_err:
-            logger.warning("[Vision OCR] Failed to parse JSON from LLM: %s. Using fallback.", json_err)
-            parsed = {}
-        normalized = _normalize_bill_dict(parsed)
+                    raw_content = choices[0].get("message", {}).get("content", "") or ""
+                    cleaned = _clean_json_markdown(raw_content)
+
+                    if not cleaned or cleaned == "{}" or len(cleaned) < 15:
+                        logger.warning(
+                            "[Vision OCR] Model '%s' returned empty or trivial output: '%s'. Trying next candidate...",
+                            target_model,
+                            raw_content[:150],
+                        )
+                        continue
+
+                    cand_parsed = json.loads(cleaned)
+                    if not isinstance(cand_parsed, dict):
+                        logger.warning("[Vision OCR] Model '%s' returned non-dict JSON. Trying next...", target_model)
+                        continue
+
+                    # If model explicitly said it is not a utility bill
+                    if cand_parsed.get("is_utility_bill") in (False, "false", "False", 0, "0"):
+                        logger.info("[Vision OCR] Model '%s' classified image as non-utility bill.", target_model)
+                        parsed_data = cand_parsed
+                        break
+
+                    unwrapped = _unwrap_envelope(cand_parsed)
+                    has_receipt_data = any(
+                        k in unwrapped
+                        for k in ("services", "total_amount", "period", "provider_name", "total", "amount", "услуги", "итого")
+                    )
+                    if not has_receipt_data:
+                        logger.warning(
+                            "[Vision OCR] Model '%s' JSON lacks receipt keys: '%s'. Trying next candidate...",
+                            target_model,
+                            cleaned[:150],
+                        )
+                        continue
+
+                    logger.info(
+                        "[Vision OCR] Model '%s' successfully recognized receipt JSON (%d chars)",
+                        target_model,
+                        len(cleaned),
+                    )
+                    parsed_data = cand_parsed
+                    break
+
+                except Exception as parse_err:
+                    logger.warning(
+                        "[Vision OCR] Failed to parse output from model '%s': %s. Trying next...",
+                        target_model,
+                        parse_err,
+                    )
+                    continue
+
+        if parsed_data is None:
+            err_detail = f" ({last_err})" if last_err else ""
+            raise ValueError(
+                f"Нейросети не удалось распознать данные на изображении{err_detail}. "
+                "Пожалуйста, сделайте более четкое фото квитанции, где видна таблица начислений (ХВС, ГВС, отопление, свет)."
+            )
+
+        normalized = _normalize_bill_dict(parsed_data)
 
         logger.info(
             "[Vision OCR Parsed] provider='%s', account='%s', period='%s', services=%d, total=%.2f",
