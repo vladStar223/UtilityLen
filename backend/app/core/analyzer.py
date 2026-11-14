@@ -40,15 +40,19 @@ _KNOWN_CODES = {
     "electricity",
     "cold_water_soi",
     "hot_water_soi",
+    "electricity_soi",
+    "wastewater_soi",
     "maintenance",
     "waste",
     "wastewater",
+    "drainage",
     "capital_repair",
+    "capital_repairs",
     "recalculation",
     "optional_service",
 }
 
-_SOI_CODES = ("cold_water_soi", "hot_water_soi")
+_SOI_CODES = ("cold_water_soi", "hot_water_soi", "electricity_soi", "wastewater_soi")
 
 
 def _round2(value: float) -> float:

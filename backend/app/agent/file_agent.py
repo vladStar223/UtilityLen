@@ -22,28 +22,31 @@ from app.agent.parser import JsonBillParser, PdfBillParser, VisionBillParser
 from app.core.config import settings
 from app.core.logging import logger
 from app.core.models import BillDocument, ServiceLine
+from app.core.normalizer import normalize_service_code
 
-AUDITOR_SYSTEM_PROMPT = """Вы — профессиональный финансовый аудитор в сфере жилищно-коммунального хозяйства (ЖКХ) Российской Федерации.
+AUDITOR_SYSTEM_PROMPT = """Вы — ведущий финансовый аудитор в сфере жилищно-коммунального хозяйства (ЖКХ) Российской Федерации, эксперт по платежным документам г. Владивостока и Приморского края.
 Ваша задача — провести детальный финансовый аудит квитанции/счета за коммунальные услуги и безошибочно извлечь структурированные данные.
 
 Извлеките данные строго в формате JSON, соответствующем следующей схеме:
 {
   "bill_id": "строковый идентификатор (из квитанции или bill-YYYY-MM-XXXX)",
-  "period": "расчетный период строго в формате YYYY-MM (например, 2024-02)",
+  "period": "расчетный период строго в формате YYYY-MM (например, 2026-09)",
   "address": "полный адрес жилого помещения (город, улица, номер дома, квартира)",
   "payer": "ФИО плательщика/собственника или null",
-  "total_amount": итоговая сумма к оплате в рублях (число с плавающей точкой, 2 знака),
+  "provider_name": "Наименование организации-поставщика (например, ПАО «ДЭК», КГУП «Приморский водоканал», Фонд капитального ремонта Приморского края, ООО «УК Первомайского района», АО «РКЦ»)",
+  "personal_account": "номер лицевого счета (например, 10507138, 105-0713-8, 1320-9068-5)",
+  "total_amount": итоговая сумма к оплате за расчетный период в рублях (число с плавающей точкой, 2 знака),
   "services": [
     {
-      "service_code": "код услуги: cold_water, hot_water, heating, electricity, drainage, maintenance, waste, capital_repairs или other",
+      "service_code": "код услуги: cold_water, hot_water, heating, electricity, wastewater, maintenance, waste, capital_repair, cold_water_soi, hot_water_soi, electricity_soi, wastewater_soi, optional_service или other",
       "raw_name": "исходное наименование услуги из квитанции",
-      "unit": "единица измерения (м3, Гкал, кВт·ч, м2, чел, шт)",
-      "volume": объем потребления (число),
-      "tariff": тариф за единицу в рублях (число),
-      "coefficient": повышающий коэффициент (число, обычно 1.0),
-      "recalculation": сумма перерасчета в рублях (число, 0.0 если нет),
-      "penalty": пени/штрафы в рублях (число, 0.0 если нет),
-      "total": итоговая сумма начисления по услуге в рублях (число)
+      "unit": "единица измерения (м3, Гкал, кВт·ч, м2, чел, шт, усл)",
+      "volume": объем потребления (число, float),
+      "tariff": тариф за единицу в рублях (число, float),
+      "coefficient": повышающий коэффициент (число, по умолчанию 1.0; если 1.5 или 3.0 — укажите именно это число),
+      "recalculation": сумма перерасчета в рублях (число, float, 0.0 если нет, отрицательное при уменьшении платы),
+      "penalty": пени/штрафы в рублях (число, float, 0.0 если нет),
+      "total": итоговая сумма начисления по услуге в рублях (число, float)
     }
   ],
   "meters": []
@@ -51,22 +54,42 @@ AUDITOR_SYSTEM_PROMPT = """Вы — профессиональный финан�
 
 Правила классификации услуг (service_code):
 - Холодное водоснабжение / ХВС / питьевая вода -> cold_water
-- Горячее водоснабжение / ГВС / подогрев воды -> hot_water
+- Горячее водоснабжение / ГВС / двухкомпонентный тариф (Компонент на тепловую энергию, Компонент на теплоноситель) -> hot_water
 - Отопление / Теплоснабжение / тепловая энергия -> heating
-- Электроснабжение / электроэнергия / день-ночь -> electricity
-- Водоотведение / канализация / сточные воды -> drainage
-- Содержание жилья / управление МКД / СиРЖ -> maintenance
+- Электроснабжение / электроэнергия (День, Ночь, круглосуточно) -> electricity
+- Водоотведение / канализация / сточные воды -> wastewater (или drainage)
+- Содержание жилья / жилого помещения / управление МКД / СиРЖ -> maintenance
 - Обращение с ТКО / вывоз мусора / ТБО -> waste
-- Взнос на капитальный ремонт / капремонт -> capital_repairs
+- Взнос на капитальный ремонт / капремонт -> capital_repair
+- Общедомовые нужды (СОИ / ОДН в МКД):
+  * ХВС на СОИ в МКД / Расходы при содержании ... ХВС -> cold_water_soi
+  * ГВС на СОИ в МКД / Расходы при содержании ... ГВС -> hot_water_soi
+  * Э/Э на СОИ в МКД / Расходы при содержании ... Электроэнергия -> electricity_soi
+  * Водоотведение на СОИ в МКД / Расходы при содержании ... Водоотведение -> wastewater_soi
+- Дополнительные услуги (печать квитанций по кап.ремонту, антенна, домофон) -> optional_service
 - Прочие услуги -> other
 
+Специфика региональных квитанций (г. Владивосток и Приморский край):
+1. ПАО «ДЭК» / филиал «Приморские тепловые сети» АО «ДГК» / КГУП «ПЭО» (Единый платежный документ):
+   - Содержит электроэнергию (день/ночь), отопление, двухкомпонентное ГВС (тепловая энергия [Гкал] + теплоноситель [м3]), обращение с ТКО.
+   - total_amount берите строго из графы «Всего к оплате БЕЗ учета рекомендуемого платежа» (НЕ включайте добровольный рекомендуемый аванс!).
+   - Перерасчеты из графы «Перерасчеты, руб.» заносите в recalculation.
+2. КГУП «Приморский водоканал»:
+   - Включает ХВС и Водоотведение.
+   - Повышающий коэффициент: если в графе начисления стоит звездочка (*) или внизу указано «применен повышающий коэффициент в размере равном 3» (или 1.5) — обязательно укажите coefficient: 3.0 (или 1.5).
+   - total_amount берите строго из строки «ИТОГО» (НЕ берите сумму с рекомендуемым платежом!).
+3. Фонд капитального ремонта многоквартирных домов Приморского края (ФКР):
+   - Взнос на капремонт: volume = площадь (кв.м), tariff = ставка взноса на кв.м, total = итого к оплате. service_code: capital_repair.
+4. Управляющие компании Владивостока (АО «РКЦ», ООО «УК Первомайского района», ООО «УК Комплексное обслуживание домов»):
+   - Содержит Содержание жилого помещения (maintenance) и статьи СОИ по 4 ресурсам: ХВС, ГВС, Э/Э, Водоотведение, а также доп. услуги (печать квитанций).
+5. Период: строго YYYY-MM («СЕНТЯБРЬ 2026 г.» -> 2026-09, «09.2026» -> 2026-09, «(09.26)» -> 2026-09, «07.26» -> 2026-07).
+
 Важные требования:
-1. Период строго YYYY-MM. Если указан месяц словом (например, 'Декабрь 2024'), переведите в '2024-12'.
-2. Суммы и объемы должны быть числами (float). Разделитель — точка.
-3. total_amount должен соответствовать общей сумме к оплате за расчетный период.
-4. Ответ должен быть ИСКЛЮЧИТЕЛЬНО валидным JSON-объектом, без markdown-разметки (без ```json), без вводных и заключительных фраз.
-5. Если на изображении или в тексте видна квитанция/счет за услуги ЖКХ, но таблица начислений видна не полностью или частично смазана — ВСЁ РАВНО извлеките всё, что можете различить (сумму к оплате, поставщика, лицевой счет, любые услуги), либо сформируйте общую строку услуги ("Коммунальные услуги"). Не возвращайте ошибку, если это квитанция!
-6. КРИТИЧЕСКИ ВАЖНО: Только если переданный документ совершенно НЕ связан с ЖКХ (например: фото животного, еда, лицо человека, чек из супермаркета, мем, пейзаж):
+1. Суммы и объемы должны быть числами (float). Разделитель — точка.
+2. total_amount должен соответствовать сумме к оплате за расчетный период без учета рекомендуемого аванса.
+3. Ответ должен быть ИСКЛЮЧИТЕЛЬНО валидным JSON-объектом, без markdown-разметки (без ```json), без вводных и заключительных фраз.
+4. Если на изображении или в тексте видна квитанция/счет за услуги ЖКХ, но таблица начислений видна не полностью или частично смазана — ВСЁ РАВНО извлеките всё, что можете различить (сумму к оплате, поставщика, лицевой счет, любые услуги), либо сформируйте общую строку услуги ("Коммунальные услуги"). Не возвращайте ошибку, если это квитанция!
+5. КРИТИЧЕСКИ ВАЖНО: Только если переданный документ совершенно НЕ связан с ЖКХ (например: фото животного, еда, лицо человека, чек из супермаркета, мем, пейзаж):
    Верните строго следующий JSON:
    {
      "is_utility_bill": false,
@@ -128,6 +151,62 @@ def _unwrap_envelope(data: Any) -> Dict[str, Any]:
     return data
 
 
+_MONTHS_RU = {
+    "январ": "01",
+    "феврал": "02",
+    "март": "03",
+    "апрел": "04",
+    "ма": "05",
+    "июн": "06",
+    "июл": "07",
+    "август": "08",
+    "сентябр": "09",
+    "октябр": "10",
+    "ноябр": "11",
+    "декабр": "12",
+}
+
+
+def _normalize_period_str(raw: Any) -> str:
+    """Robustly parse raw period string into standard YYYY-MM format."""
+    if not raw or not isinstance(raw, str):
+        from datetime import datetime
+        return datetime.now().strftime("%Y-%m")
+
+    val = raw.strip()
+    # Check YYYY-MM
+    m_iso = re.search(r"\b(20\d{2})[-/.](\d{1,2})\b", val)
+    if m_iso:
+        y, m = m_iso.group(1), int(m_iso.group(2))
+        if 1 <= m <= 12:
+            return f"{y}-{m:02d}"
+
+    # Check MM.YYYY
+    m_ru_full = re.search(r"\b(\d{1,2})[-/.]\s*(20\d{2})\b", val)
+    if m_ru_full:
+        m, y = int(m_ru_full.group(1)), m_ru_full.group(2)
+        if 1 <= m <= 12:
+            return f"{y}-{m:02d}"
+
+    # Check MM.YY e.g. 09.26 or (09.26) or 07.26
+    m_ru_short = re.search(r"(?:^|[^\d])(\d{2})[-/.](\d{2})(?:$|[^\d])", val)
+    if m_ru_short:
+        m_part, y_part = int(m_ru_short.group(1)), int(m_ru_short.group(2))
+        if 1 <= m_part <= 12 and 20 <= y_part <= 35:
+            return f"20{y_part}-{m_part:02d}"
+
+    # Check Russian month names e.g. "Сентябрь 2026", "АВГУСТ 2026г."
+    lowered = val.lower()
+    m_year = re.search(r"(20\d\d)", lowered)
+    target_year = m_year.group(1) if m_year else "2026"
+    for ru_root, m_num in _MONTHS_RU.items():
+        if ru_root in lowered:
+            return f"{target_year}-{m_num}"
+
+    from datetime import datetime
+    return datetime.now().strftime("%Y-%m")
+
+
 def _normalize_bill_dict(data: Any) -> Dict[str, Any]:
     """Sanitize and normalize raw dictionary into a valid BillDocument payload."""
     if not isinstance(data, dict):
@@ -183,8 +262,19 @@ def _normalize_bill_dict(data: Any) -> Dict[str, Any]:
     for s in raw_services:
         if not isinstance(s, dict):
             continue
-        s_code = s.get("service_code") or s.get("code") or "other"
-        s_name = s.get("raw_name") or s.get("name") or s.get("display_name") or s.get("наименование") or str(s_code)
+        raw_code = str(s.get("service_code") or s.get("code") or "").strip()
+        s_name = str(s.get("raw_name") or s.get("name") or s.get("display_name") or s.get("наименование") or "").strip()
+        if not s_name:
+            s_name = raw_code or "Коммунальные услуги"
+
+        # Deduce canonical service code
+        if not raw_code or raw_code.lower() in ("null", "none", "other", "unknown") or raw_code.isdigit():
+            resolved_code = normalize_service_code(s_name)
+        else:
+            resolved_code = normalize_service_code(raw_code)
+            if resolved_code in ("other", "unknown") and s_name:
+                resolved_code = normalize_service_code(s_name)
+
         s_unit = s.get("unit") or s.get("единица") or "руб"
         try:
             s_vol = float(s.get("volume") or s.get("объем") or 1.0)
@@ -200,6 +290,8 @@ def _normalize_bill_dict(data: Any) -> Dict[str, Any]:
             s_tot = 0.0
         try:
             s_coeff = float(s.get("coefficient") or s.get("коэффициент") or 1.0)
+            if s_coeff <= 0.0:
+                s_coeff = 1.0
         except (ValueError, TypeError):
             s_coeff = 1.0
         try:
@@ -212,7 +304,7 @@ def _normalize_bill_dict(data: Any) -> Dict[str, Any]:
             s_penalty = 0.0
 
         clean_services.append({
-            "service_code": str(s_code),
+            "service_code": str(resolved_code),
             "raw_name": str(s_name),
             "unit": str(s_unit),
             "volume": s_vol,
@@ -260,15 +352,23 @@ def _normalize_bill_dict(data: Any) -> Dict[str, Any]:
             calc_total = sum(s["total"] for s in clean_services)
             unwrapped["total_amount"] = round(calc_total, 2)
 
-    if not unwrapped.get("period"):
-        from datetime import datetime
-        unwrapped["period"] = datetime.now().strftime("%Y-%m")
+    unwrapped["period"] = _normalize_period_str(unwrapped.get("period"))
 
     if not unwrapped.get("address"):
         unwrapped["address"] = "г. Владивосток"
 
     if not unwrapped.get("provider_name"):
-        unwrapped["provider_name"] = "ПАО «ДЭК» / КГУП «Примводоканал»"
+        service_codes_set = {s["service_code"] for s in clean_services}
+        if "capital_repair" in service_codes_set:
+            unwrapped["provider_name"] = "Фонд капитального ремонта многоквартирных домов Приморского края"
+        elif "heating" in service_codes_set or any("дэк" in str(s["raw_name"]).lower() for s in clean_services):
+            unwrapped["provider_name"] = "ПАО «ДЭК» (филиал «Дальэнергосбыт») / АО «ДГК»"
+        elif "cold_water" in service_codes_set and "cold_water_soi" not in service_codes_set:
+            unwrapped["provider_name"] = "КГУП «Приморский водоканал»"
+        elif "maintenance" in service_codes_set:
+            unwrapped["provider_name"] = "ООО «Управляющая компания»"
+        else:
+            unwrapped["provider_name"] = "ПАО «ДЭК» / КГУП «Примводоканал»"
 
     if not unwrapped.get("personal_account"):
         unwrapped["personal_account"] = "010001702100519"
@@ -307,20 +407,23 @@ def _get_model_candidates(primary_model: str, is_vision: bool = False) -> List[s
     if is_vision:
         fallbacks = [
             "gemini-3.7-flash",
-            "gemini-3.5-flash-tunnelcode",
-            "gpt-5.5-tunnelcode",
+            "gemini-3.5-flash",
+            "deepseek-v4-flash-vision",
             "gpt-4o-mini",
+            "gpt-4o",
         ]
     else:
         fallbacks = [
             "deepseek-v4-pro-tunnelcode",
             "gemini-3.7-flash",
-            "gpt-5.5-tunnelcode",
+            "gemini-3.5-flash",
             "gpt-4o-mini",
         ]
     for fb in fallbacks:
         if fb not in candidates:
             candidates.append(fb)
+        if f"gptunnel/{fb}" not in candidates:
+            candidates.append(f"gptunnel/{fb}")
     return candidates
 
 

@@ -200,12 +200,15 @@ def process_uploaded_bill(
     # Step 1: Save current bill in DB
     crud.save_bill(db, curr_bill, user_id=user_id)
 
-    # Step 2: Find previous bill in DB
+    # Step 2: Find previous bill in DB with overlapping services
+    curr_codes = [s.service_code for s in curr_bill.services]
     prev_bill_orm = crud.find_previous_bill(
         db,
         user_id=user_id,
         address=curr_bill.address,
         current_period=curr_bill.period,
+        service_codes=curr_codes,
+        provider_name=getattr(curr_bill, "provider_name", None),
     )
 
     # Step 3: Analyze

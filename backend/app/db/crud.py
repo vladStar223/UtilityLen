@@ -16,6 +16,7 @@ from app.core.models import (
     MeterReading as CoreMeterReading,
     ServiceLine,
 )
+from app.core.normalizer import normalize_service_code
 from app.db.models import (
     Bill,
     BillService,
@@ -130,12 +131,14 @@ def find_previous_bill(
     user_id: str,
     address: str,
     current_period: str,
+    service_codes: Optional[List[str]] = None,
+    provider_name: Optional[str] = None,
 ) -> Optional[Bill]:
     """Find the most recent bill for a user preceding ``current_period``.
 
-    First attempts to find a bill with the exact matching ``address``.
-    If none is found, falls back to any bill for that user preceding ``current_period``.
-    Orders by ``period.desc()``, returns the first match or None.
+    First attempts to find a bill with the matching ``address`` and overlapping services.
+    If none is found or if services differ completely (e.g. comparing water with heating),
+    avoids invalid cross-bill comparisons so normative audit runs instead.
     """
     base_query = (
         db.query(Bill)
@@ -144,20 +147,32 @@ def find_previous_bill(
     )
 
     if address:
-        exact = (
+        candidates = (
             base_query
             .filter(Bill.address == address)
             .order_by(Bill.period.desc(), Bill.created_at.desc())
-            .first()
+            .all()
         )
-        if exact is not None:
-            return exact
+    else:
+        candidates = (
+            base_query
+            .order_by(Bill.period.desc(), Bill.created_at.desc())
+            .all()
+        )
 
-    return (
-        base_query
-        .order_by(Bill.period.desc(), Bill.created_at.desc())
-        .first()
-    )
+    if not candidates:
+        return None
+
+    if service_codes:
+        normalized_target_codes = {normalize_service_code(c) for c in service_codes if c}
+        for b in candidates:
+            b_codes = {normalize_service_code(s.service_code) for s in b.services}
+            if normalized_target_codes & b_codes:
+                return b
+        # No bill in history with overlapping services found -> return None to run normative audit
+        return None
+
+    return candidates[0]
 
 
 def bill_to_document(bill: Bill) -> BillDocument:
