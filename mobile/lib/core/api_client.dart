@@ -501,6 +501,12 @@ class ApiClient {
   }
 
   ComparisonReport _buildMockReport(String caseId) {
+    if (caseId == "case_04_vladivostok_coeff3") {
+      return _buildVladivostokRealCase();
+    }
+    if (caseId == "case_01_heating_spike") {
+      return buildSampleResponse("case_01_heating_spike").report!;
+    }
     return const ComparisonReport(
       comparisonId: "cmp-mock-coeff15",
       summary: SummaryReport(

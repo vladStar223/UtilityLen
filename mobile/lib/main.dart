@@ -37,7 +37,7 @@ class UtilityLensApp extends StatelessWidget {
       providers: [
         BlocProvider<AuditBloc>(
           create: (_) => AuditBloc(apiClient: apiClient)
-            ..add(const LoadAuditDataEvent(caseId: 'case_02_coeff_15')),
+            ..add(const LoadAuditDataEvent(caseId: 'case_04_vladivostok_coeff3')),
         ),
         BlocProvider<ChatBloc>(
           create: (_) => ChatBloc(apiClient: apiClient),

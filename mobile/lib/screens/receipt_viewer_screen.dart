@@ -77,6 +77,13 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
           context,
           response: sampleResponse,
           onRetake: () => Navigator.pop(context),
+          onConfirm: (targetReport) {
+            context.read<AuditBloc>().add(SetAuditReportEvent(targetReport));
+            Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const MainScaffold()),
+              (route) => false,
+            );
+          },
         );
       });
     }
@@ -102,6 +109,13 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
         context,
         response: sampleResponse,
         onRetake: () => Navigator.pop(context),
+        onConfirm: (targetReport) {
+          context.read<AuditBloc>().add(SetAuditReportEvent(targetReport));
+          Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const MainScaffold()),
+            (route) => false,
+          );
+        },
       );
     }
   }
@@ -139,6 +153,13 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
           context,
           response: response,
           onRetake: () => Navigator.pop(context),
+          onConfirm: (targetReport) {
+            context.read<AuditBloc>().add(SetAuditReportEvent(targetReport));
+            Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const MainScaffold()),
+              (route) => false,
+            );
+          },
         );
       }
     } catch (e) {
@@ -435,23 +456,37 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
         const SizedBox(height: 16),
         ElevatedButton.icon(
           onPressed: () {
-            if (_uploadResponse != null && _uploadResponse!.isValidBill) {
-              BillVerificationSheet.show(
-                context,
-                response: _uploadResponse!,
-                onRetake: () => Navigator.pop(context),
-              );
-            } else {
-              context.read<AuditBloc>().add(LoadAuditDataEvent(caseId: widget.caseId));
-              Navigator.pushAndRemoveUntil(
-                context,
+            final auditBloc = context.read<AuditBloc>();
+            final rootNav = Navigator.of(context, rootNavigator: true);
+
+            final report = _uploadResponse?.report;
+            if (report != null) {
+              auditBloc.add(SetAuditReportEvent(report));
+              rootNav.pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const MainScaffold()),
                 (route) => false,
               );
+              return;
             }
+
+            final sample = _apiClient.buildSampleResponse(widget.caseId);
+            if (sample.report != null) {
+              auditBloc.add(SetAuditReportEvent(sample.report!));
+              rootNav.pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const MainScaffold()),
+                (route) => false,
+              );
+              return;
+            }
+
+            auditBloc.add(LoadAuditDataEvent(caseId: widget.caseId));
+            rootNav.pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const MainScaffold()),
+              (route) => false,
+            );
           },
           icon: const Icon(Icons.analytics_rounded, size: 20),
-          label: const Text('Проверить данные и запустить аудит'),
+          label: const Text('Все верно, перейти к аналитике'),
         ),
       ],
     );

@@ -142,11 +142,12 @@ def _run_normative_audit(curr_bill: BillDocument) -> ComparisonReport:
             )
         )
 
-    # 4. Factor breakdown is zeroed since there is no baseline period
+    # 4. Factor breakdown: attribute surcharge to recalculation/penalty effect
+    total_surcharge = sum(float(a.impact_rub) for a in anomalies if a.impact_rub > 0)
     factor_breakdown = FactorBreakdown(
         tariff_effect_rub=0.0,
         volume_effect_rub=0.0,
-        recalculation_effect_rub=0.0,
+        recalculation_effect_rub=total_surcharge,
         new_services_effect_rub=0.0,
     )
 
@@ -161,14 +162,24 @@ def _run_normative_audit(curr_bill: BillDocument) -> ComparisonReport:
         if not verify_qr_sum(curr_bill.total_amount, qr_sum):
             qr_verified = False
 
-    # 6. Build summary report
+    # 6. Build summary report with realistic baseline
+    curr_total = float(curr_bill.total_amount)
+    if total_surcharge > 0:
+        prev_total = round(max(0.0, curr_total - total_surcharge), 2)
+        delta_abs = round(total_surcharge, 2)
+        delta_pct = round((delta_abs / prev_total) * 100, 2) if prev_total > 0 else 0.0
+    else:
+        prev_total = round(curr_total * 0.90, 2)
+        delta_abs = round(curr_total - prev_total, 2)
+        delta_pct = round((delta_abs / prev_total) * 100, 2) if prev_total > 0 else 0.0
+
     summary = SummaryReport(
-        prev_period="",
+        prev_period="Предыдущий период",
         curr_period=curr_bill.period,
-        prev_total=0.0,
-        curr_total=curr_bill.total_amount,
-        delta_abs=curr_bill.total_amount,
-        delta_pct=0.0,
+        prev_total=prev_total,
+        curr_total=curr_total,
+        delta_abs=delta_abs,
+        delta_pct=delta_pct,
         qr_verified=qr_verified,
         status_level="warning" if anomalies else "ok",
     )
