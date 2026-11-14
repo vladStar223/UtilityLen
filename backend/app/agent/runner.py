@@ -92,10 +92,10 @@ def _get_model_candidates(primary_model: str, is_vision: bool = False) -> List[s
         ]
     else:
         fallbacks = [
-            "claude-sonnet-4.6-tunnelcode",
             "deepseek-v4-flash-tunnelcode",
             "gemini-3.7-flash",
             "gemini-3.8-flash",
+            "claude-sonnet-4.6-tunnelcode",
             "qwen-3.7-max-tunnelcode",
             "deepseek-v4-pro-tunnelcode",
             "gpt-5.5-tunnelcode",
