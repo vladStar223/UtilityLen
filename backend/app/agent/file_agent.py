@@ -244,9 +244,11 @@ class BillAnalysisAgent:
                     )
                     resp.raise_for_status()
                 break
-            if resp is None:
-                raise ValueError("No reachable LLM model found on GPTunnel")
-            resp.raise_for_status()
+            if resp is None or resp.status_code >= 400:
+                err_msg = resp.text if resp is not None else "no response"
+                last_code = getattr(resp, "status_code", "None")
+                logger.error("[Text LLM] Все модели отклонены шлюзом (HTTP %s): %s", last_code, err_msg)
+                raise ValueError(f"Сервис анализа текста квитанции GPTunnel вернул ошибку (HTTP {last_code}: {err_msg})")
             data = resp.json()
 
         content = data["choices"][0]["message"]["content"]
@@ -346,9 +348,11 @@ class BillAnalysisAgent:
                     resp.raise_for_status()
                 break
 
-            if resp is None:
-                raise ValueError("No reachable Vision LLM model found on GPTunnel")
-            resp.raise_for_status()
+            if resp is None or resp.status_code >= 400:
+                err_msg = resp.text if resp is not None else "no response"
+                last_code = getattr(resp, "status_code", "None")
+                logger.error("[Vision OCR] Все модели отклонены шлюзом (HTTP %s): %s", last_code, err_msg)
+                raise ValueError(f"Сервис распознавания (Vision) шлюза GPTunnel вернул ошибку (HTTP {last_code}: {err_msg})")
             data = resp.json()
 
         content = data["choices"][0]["message"]["content"]
