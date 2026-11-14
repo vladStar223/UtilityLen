@@ -51,7 +51,7 @@ _ANOMALY_LAW_REF: Dict[str, str] = {
 
 def _normalize_chat_url(raw_url: Optional[str]) -> Optional[str]:
     if not raw_url:
-        return None
+        return "https://gptunnel.ru/v1/chat/completions"
     cleaned = raw_url.strip().rstrip("/")
     if not cleaned.endswith("/chat/completions"):
         if cleaned.endswith("/v1"):
@@ -61,13 +61,23 @@ def _normalize_chat_url(raw_url: Optional[str]) -> Optional[str]:
     return cleaned
 
 
+def _normalize_model_name(raw_model: Optional[str], default: str = "deepseek-v3") -> str:
+    if not raw_model:
+        return default
+    m = raw_model.strip()
+    if m.startswith("gptunnel/"):
+        m = m[len("gptunnel/"):]
+    if "deepseek-v4" in m.lower():
+        m = "deepseek-v3"
+    return m
+
+
 def _get_llm_credentials():
     api_key = os.getenv("LLM_API_KEY") or os.getenv("GPTUNNEL_API_KEY")
     url = _normalize_chat_url(os.getenv("LLM_API_URL") or os.getenv("GPTUNNEL_BASE_URL"))
     timeout = float(os.getenv("LLM_TIMEOUT_S", "35.0"))
-    raw_model = os.getenv("LLM_MODEL", "deepseek-v4-pro").strip()
-    # Normalize model: strip 'gptunnel/' prefix if present
-    model = raw_model[len("gptunnel/"):] if raw_model.startswith("gptunnel/") else raw_model
+    raw_model = os.getenv("LLM_MODEL", "deepseek-v3").strip()
+    model = _normalize_model_name(raw_model, default="deepseek-v3")
     return api_key if api_key else None, url, timeout, model
 
 
@@ -238,45 +248,59 @@ async def _stream_llm(
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream("POST", url, json=payload, headers=headers) as resp:
-                logger.info("[Chat LLM] Received HTTP %d from %s", resp.status_code, url)
-                if resp.status_code >= 400:
-                    err_body = await resp.aread()
-                    err_text = err_body.decode("utf-8", errors="replace")
-                    logger.warning(
-                        "[Chat LLM] Stream error HTTP %d for '%s' (model: '%s'): %s",
-                        resp.status_code,
-                        url,
-                        model,
-                        err_text,
-                    )
-                    return
-                async for raw_line in resp.aiter_lines():
-                    if not raw_line:
+            target_model = model
+            for attempt in range(2):
+                payload["model"] = target_model
+                async with client.stream("POST", url, json=payload, headers=headers) as resp:
+                    logger.info("[Chat LLM] Received HTTP %d from %s (model: %s)", resp.status_code, url, target_model)
+                    if resp.status_code == 404 and target_model != "gpt-4o-mini" and attempt == 0:
+                        err_body = await resp.aread()
+                        err_text = err_body.decode("utf-8", errors="replace")
+                        logger.warning(
+                            "[Chat LLM] Stream error HTTP 404 for model '%s': %s. Retrying stream with 'gpt-4o-mini'...",
+                            target_model,
+                            err_text,
+                        )
+                        target_model = "gpt-4o-mini"
                         continue
-                    line = raw_line.strip()
-                    if len(first_lines) < 3:
-                        first_lines.append(line)
-                    if not line.startswith("data:"):
-                        continue
-                    data_str = line[len("data:"):].strip()
-                    if data_str == "[DONE]":
-                        logger.info("[Chat LLM] Received [DONE] signal from stream")
-                        break
-                    try:
-                        chunk = json.loads(data_str)
-                        chunk_count += 1
-                        choices = chunk.get("choices", [])
-                        if choices:
-                            delta = choices[0].get("delta", {})
-                            token = delta.get("content") or delta.get("reasoning_content") or ""
-                            if token:
-                                token_count += 1
-                                collected_tokens.append(token)
-                                yield token
-                    except Exception as parse_err:
-                        logger.debug("[Chat LLM] Failed to parse SSE chunk: %s", parse_err)
-                        continue
+                    if resp.status_code >= 400:
+                        err_body = await resp.aread()
+                        err_text = err_body.decode("utf-8", errors="replace")
+                        logger.warning(
+                            "[Chat LLM] Stream error HTTP %d for '%s' (model: '%s'): %s",
+                            resp.status_code,
+                            url,
+                            target_model,
+                            err_text,
+                        )
+                        return
+                    async for raw_line in resp.aiter_lines():
+                        if not raw_line:
+                            continue
+                        line = raw_line.strip()
+                        if len(first_lines) < 3:
+                            first_lines.append(line)
+                        if not line.startswith("data:"):
+                            continue
+                        data_str = line[len("data:"):].strip()
+                        if data_str == "[DONE]":
+                            logger.info("[Chat LLM] Received [DONE] signal from stream")
+                            break
+                        try:
+                            chunk = json.loads(data_str)
+                            chunk_count += 1
+                            choices = chunk.get("choices", [])
+                            if choices:
+                                delta = choices[0].get("delta", {})
+                                token = delta.get("content") or delta.get("reasoning_content") or ""
+                                if token:
+                                    token_count += 1
+                                    collected_tokens.append(token)
+                                    yield token
+                        except Exception as parse_err:
+                            logger.debug("[Chat LLM] Failed to parse SSE chunk: %s", parse_err)
+                            continue
+                    break
 
         full_deepseek_text = "".join(collected_tokens)
         logger.info(
@@ -285,9 +309,9 @@ async def _stream_llm(
             token_count,
         )
         if full_deepseek_text:
-            logger.info("[Chat LLM Output] Ответ DeepSeek:\n%s", full_deepseek_text)
+            logger.info("[Chat LLM Output] Ответ модели (%s):\n%s", target_model, full_deepseek_text)
         else:
-            logger.warning("[Chat LLM Output] DeepSeek вернул 0 токенов (first line: '%s')", first_lines[0] if first_lines else "None")
+            logger.warning("[Chat LLM Output] Модель вернула 0 токенов (first line: '%s')", first_lines[0] if first_lines else "None")
     except Exception as exc:
         logger.warning("[Chat LLM] Stream exception (%s): %s", type(exc).__name__, exc)
         return
@@ -325,12 +349,21 @@ async def _call_llm(
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, json=payload, headers=headers)
             logger.info("[Chat LLM] Non-streaming response HTTP %d", resp.status_code)
+            if resp.status_code == 404 and model != "gpt-4o-mini":
+                logger.warning(
+                    "[Chat LLM] Model '%s' returned 404 at %s: %s. Retrying with 'gpt-4o-mini'...",
+                    model,
+                    url,
+                    resp.text,
+                )
+                payload["model"] = "gpt-4o-mini"
+                resp = await client.post(url, json=payload, headers=headers)
             if resp.status_code >= 400:
                 logger.warning(
                     "[Chat LLM] Non-streaming error HTTP %d for '%s' (model: '%s'): %s",
                     resp.status_code,
                     url,
-                    model,
+                    payload.get("model"),
                     resp.text,
                 )
                 return None
@@ -339,9 +372,9 @@ async def _call_llm(
         msg = choice.get("message", {})
         content = msg.get("content") or msg.get("reasoning_content")
         if content:
-            logger.info("[Chat LLM Output] Ответ DeepSeek (non-streaming):\n%s", content)
+            logger.info("[Chat LLM Output] Ответ модели (non-streaming):\n%s", content)
         else:
-            logger.warning("[Chat LLM Output] DeepSeek вернул пустой content в non-streaming! Ответ: %s", data)
+            logger.warning("[Chat LLM Output] Модель вернула пустой content в non-streaming! Ответ: %s", data)
         return content or None
     except Exception as exc:
         logger.warning("[Chat LLM] Non-streaming exception for '%s': %s", url, exc)

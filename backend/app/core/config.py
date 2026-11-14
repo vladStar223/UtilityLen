@@ -69,7 +69,11 @@ class Settings:
         )
         self.LLM_MODEL: str = os.getenv(
             "LLM_MODEL",
-            "gptunnel/deepseek-v4-pro-tunnelcode",
+            "deepseek-v3",
+        )
+        self.VISION_LLM_MODEL: str = os.getenv(
+            "VISION_LLM_MODEL",
+            "gpt-4o-mini",
         )
 
         # API authentication (MVP). Empty string disables the check.
