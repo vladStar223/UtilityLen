@@ -115,6 +115,13 @@ def chat_stream(
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
     owner_id = user.user_id if user is not None else api_key_owner
+    client_ip = request.client.host if request.client else "unknown"
+    logger.info(
+        "[Chat Route] POST /api/v1/chat/stream from %s: comparison_id='%s', message='%s'",
+        client_ip,
+        payload.comparison_id,
+        payload.message,
+    )
     try:
         record = tools.get_report(payload.comparison_id, owner_id)
     except PermissionError:

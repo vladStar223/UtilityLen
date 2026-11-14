@@ -69,7 +69,11 @@ class Settings:
         )
         self.LLM_MODEL: str = os.getenv(
             "LLM_MODEL",
-            "gptunnel/deepseek-v4-pro-tunnelcode",
+            "deepseek-v4-pro-tunnelcode",
+        )
+        self.VISION_LLM_MODEL: str = os.getenv(
+            "VISION_LLM_MODEL",
+            "gemini-3.7-flash",
         )
 
         # API authentication (MVP). Empty string disables the check.
