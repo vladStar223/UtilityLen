@@ -232,6 +232,203 @@ class ApiClient {
         'перерасчета и штрафа 50% от суммы переплаты (ч. 6 ст. 157 ЖК РФ).';
   }
 
+  /// Генерация готового структурированного ответа для тестовых образцов квитанций
+  BillUploadResponse buildSampleResponse(String caseId) {
+    if (caseId == "case_04_vladivostok_coeff3") {
+      final report = _buildVladivostokRealCase();
+      return BillUploadResponse(
+        isValidBill: true,
+        confidence: "high",
+        documentType: "utility_bill",
+        warnings: const [],
+        report: report,
+        extractedData: const ExtractedBillData(
+          billId: "bill-primvodokanal-2026-09",
+          period: "Сентябрь 2026",
+          address: "г. Владивосток, ул. Амурская, д. 7, кв. 24",
+          providerName: "КГУП «Приморский водоканал»",
+          personalAccount: "1029384756",
+          totalAmount: 1437.50,
+          services: [
+            ExtractedServiceItem(
+              serviceCode: "cold_water",
+              rawName: "ХВС (норматив с коэф 3.0)",
+              unit: "м3",
+              volume: 7.324,
+              tariff: 46.87,
+              total: 1029.84,
+            ),
+            ExtractedServiceItem(
+              serviceCode: "drainage",
+              rawName: "Водоотведение (ХВС + ГВС)",
+              unit: "м3",
+              volume: 11.400,
+              tariff: 35.76,
+              total: 407.66,
+            ),
+          ],
+        ),
+      );
+    } else if (caseId == "case_01_heating_spike") {
+      final report = ComparisonReport(
+        comparisonId: "cmp-rkc-heating",
+        summary: const SummaryReport(
+          prevPeriod: "2026-09",
+          currPeriod: "2026-10",
+          prevTotal: 4950.0,
+          currTotal: 5420.0,
+          deltaAbs: 470.0,
+          deltaPct: 9.49,
+          qrVerified: true,
+          statusLevel: "green",
+        ),
+        factorBreakdown: const FactorBreakdown(
+          tariffEffectRub: 0.0,
+          volumeEffectRub: 470.0,
+          recalculationEffectRub: 0.0,
+          newServicesEffectRub: 0.0,
+        ),
+        anomalies: const [],
+        items: const [
+          ServiceItem(
+            category: "heating",
+            displayName: "Отопление",
+            unit: "Гкал",
+            prevVolume: 0.95,
+            currVolume: 1.15,
+            prevTariff: 3100.0,
+            currTariff: 3100.0,
+            prevTotal: 2945.0,
+            currTotal: 3565.0,
+            deltaAbs: 620.0,
+            deltaPct: 21.05,
+            tariffDeltaRub: 0.0,
+            volumeDeltaRub: 620.0,
+            coeffSurchargeRub: 0.0,
+            status: "green",
+            plainExplanation: "Сезонный пуск отопления в октябре. Тариф не повышался.",
+          ),
+        ],
+      );
+      return BillUploadResponse(
+        isValidBill: true,
+        confidence: "high",
+        documentType: "utility_bill",
+        warnings: const [],
+        report: report,
+        extractedData: const ExtractedBillData(
+          billId: "bill-rkc-2026-10",
+          period: "Октябрь 2026",
+          address: "г. Владивосток, Океанский проспект, д. 28, кв. 10",
+          providerName: "АО «Дальневосточная РКЦ»",
+          personalAccount: "9876543210",
+          totalAmount: 5420.0,
+          services: [
+            ExtractedServiceItem(
+              serviceCode: "heating",
+              rawName: "Отопление",
+              unit: "Гкал",
+              volume: 1.15,
+              tariff: 3100.0,
+              total: 3565.0,
+            ),
+            ExtractedServiceItem(
+              serviceCode: "hot_water",
+              rawName: "Горячее водоснабжение",
+              unit: "м3",
+              volume: 4.2,
+              tariff: 215.0,
+              total: 903.0,
+            ),
+            ExtractedServiceItem(
+              serviceCode: "cold_water",
+              rawName: "Холодное водоснабжение",
+              unit: "м3",
+              volume: 7.0,
+              tariff: 46.87,
+              total: 328.09,
+            ),
+            ExtractedServiceItem(
+              serviceCode: "drainage",
+              rawName: "Водоотведение",
+              unit: "м3",
+              volume: 11.2,
+              tariff: 35.76,
+              total: 400.51,
+            ),
+            ExtractedServiceItem(
+              serviceCode: "maintenance",
+              rawName: "Содержание жилья",
+              unit: "м2",
+              volume: 45.0,
+              tariff: 4.96,
+              total: 223.40,
+            ),
+          ],
+        ),
+      );
+    } else {
+      final report = _buildMockReport("case_02_coeff_15");
+      return BillUploadResponse(
+        isValidBill: true,
+        confidence: "high",
+        documentType: "utility_bill",
+        warnings: const [],
+        report: report,
+        extractedData: const ExtractedBillData(
+          billId: "bill-dek-2026-11",
+          period: "Ноябрь 2026",
+          address: "г. Владивосток, ул. Амурская, д. 7, кв. 15",
+          providerName: "ПАО «ДЭК» / КГУП «Примтеплоэнерго»",
+          personalAccount: "40702810100000001234",
+          totalAmount: 6890.50,
+          services: [
+            ExtractedServiceItem(
+              serviceCode: "cold_water",
+              rawName: "Холодная вода (с коэф 1.5)",
+              unit: "м3",
+              volume: 10.0,
+              tariff: 49.03,
+              total: 735.45,
+            ),
+            ExtractedServiceItem(
+              serviceCode: "heating",
+              rawName: "Отопление",
+              unit: "Гкал",
+              volume: 1.45,
+              tariff: 3200.0,
+              total: 4640.00,
+            ),
+            ExtractedServiceItem(
+              serviceCode: "electricity",
+              rawName: "Электроэнергия День",
+              unit: "кВт·ч",
+              volume: 180.0,
+              tariff: 5.14,
+              total: 925.20,
+            ),
+            ExtractedServiceItem(
+              serviceCode: "electricity",
+              rawName: "Электроэнергия Ночь",
+              unit: "кВт·ч",
+              volume: 90.0,
+              tariff: 2.10,
+              total: 189.00,
+            ),
+            ExtractedServiceItem(
+              serviceCode: "maintenance",
+              rawName: "Содержание жилья",
+              unit: "м2",
+              volume: 54.0,
+              tariff: 7.42,
+              total: 400.85,
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   /// Данные реальной квитанции из Владивостока (ул. Амурская, д. 7) с коэффициентом 3.0
   ComparisonReport _buildVladivostokRealCase({String? comparisonId}) {
     return ComparisonReport(

@@ -60,6 +60,43 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _analyzeFile(File(widget.filePath!));
       });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _analyzeSampleCase(widget.caseId);
+      });
+    }
+  }
+
+  Future<void> _analyzeSampleCase(String caseId) async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    // Имитация реалистичной работы нейросети для записи видео и демо
+    await Future.delayed(const Duration(milliseconds: 1100));
+    if (!mounted) return;
+
+    final sampleResponse = _apiClient.buildSampleResponse(caseId);
+
+    setState(() {
+      _isLoading = false;
+      _uploadResponse = sampleResponse;
+      final data = sampleResponse.extractedData;
+      if (data != null) {
+        _displayProvider = data.providerName;
+        _displayAddress = data.address;
+        _displayAmount = data.totalAmount;
+        _displayPeriod = data.period;
+      }
+    });
+
+    if (mounted) {
+      BillVerificationSheet.show(
+        context,
+        response: sampleResponse,
+        onRetake: () => Navigator.pop(context),
+      );
     }
   }
 
@@ -136,16 +173,10 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              context.read<AuditBloc>().add(
-                    const LoadAuditDataEvent(caseId: 'case_04_vladivostok_coeff3'),
-                  );
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const MainScaffold()),
-                (route) => false,
-              );
+              _analyzeSampleCase(widget.caseId);
             },
-            child: const Text('Использовать демо-кейс'),
+            child: const Text('Демо-режим'),
+          ),
           ),
         ],
       ),
