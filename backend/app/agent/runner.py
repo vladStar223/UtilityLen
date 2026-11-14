@@ -234,6 +234,7 @@ async def _stream_llm(
     chunk_count = 0
     token_count = 0
     first_lines: List[str] = []
+    collected_tokens: List[str] = []
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -271,17 +272,22 @@ async def _stream_llm(
                             token = delta.get("content") or delta.get("reasoning_content") or ""
                             if token:
                                 token_count += 1
+                                collected_tokens.append(token)
                                 yield token
                     except Exception as parse_err:
                         logger.debug("[Chat LLM] Failed to parse SSE chunk: %s", parse_err)
                         continue
 
+        full_deepseek_text = "".join(collected_tokens)
         logger.info(
-            "[Chat LLM] Stream finished. Chunks: %d, tokens yielded: %d (first line: '%s')",
+            "[Chat LLM] Stream finished. Chunks: %d, tokens: %d",
             chunk_count,
             token_count,
-            first_lines[0] if first_lines else "None",
         )
+        if full_deepseek_text:
+            logger.info("[Chat LLM Output] Ответ DeepSeek:\n%s", full_deepseek_text)
+        else:
+            logger.warning("[Chat LLM Output] DeepSeek вернул 0 токенов (first line: '%s')", first_lines[0] if first_lines else "None")
     except Exception as exc:
         logger.warning("[Chat LLM] Stream exception (%s): %s", type(exc).__name__, exc)
         return
@@ -332,6 +338,10 @@ async def _call_llm(
         choice = data.get("choices", [{}])[0]
         msg = choice.get("message", {})
         content = msg.get("content") or msg.get("reasoning_content")
+        if content:
+            logger.info("[Chat LLM Output] Ответ DeepSeek (non-streaming):\n%s", content)
+        else:
+            logger.warning("[Chat LLM Output] DeepSeek вернул пустой content в non-streaming! Ответ: %s", data)
         return content or None
     except Exception as exc:
         logger.warning("[Chat LLM] Non-streaming exception for '%s': %s", url, exc)
@@ -396,6 +406,7 @@ async def generate_stream(
         return
 
     stream_successful = False
+    emitted_texts: List[str] = []
 
     # 1. Try real SSE streaming from LLM if configured
     if url:
@@ -404,6 +415,7 @@ async def generate_stream(
             async for token in _stream_llm(SYSTEM_PROMPT, data_context, message, history):
                 stream_successful = True
                 tokens_emitted += 1
+                emitted_texts.append(token)
                 yield sse_event({"type": "token", "content": token})
             logger.info("[Chat] Streaming phase finished. Total tokens emitted: %d", tokens_emitted)
         except Exception as exc:
@@ -415,19 +427,25 @@ async def generate_stream(
         llm_answer = await _call_llm(SYSTEM_PROMPT, data_context, message, history)
         if llm_answer:
             logger.info("[Chat] Non-streaming LLM succeeded with %d characters. Emitting chunks...", len(llm_answer))
+            emitted_texts.append(llm_answer)
             for chunk in _chunks(llm_answer):
                 yield sse_event({"type": "token", "content": chunk})
         else:
             logger.info("[Chat] LLM unavailable. Using smart legal knowledge-base answer.")
             answer = build_fallback_answer(report, message)
             if answer:
+                emitted_texts.append(answer)
                 for chunk in _chunks(answer):
                     yield sse_event({"type": "token", "content": chunk})
             else:
+                unavail = "AI-юрист временно недоступен: шлюз языковой модели (GPTunnel) не ответил на запрос. Пожалуйста, проверьте баланс или статус провайдера."
+                emitted_texts.append(unavail)
                 yield sse_event({
                     "type": "token",
-                    "content": "AI-юрист временно недоступен: шлюз языковой модели (GPTunnel) не ответил на запрос. Пожалуйста, проверьте баланс или статус провайдера.",
+                    "content": unavail,
                 })
 
     yield sse_event({"type": "done"})
+    final_output = "".join(emitted_texts)
+    logger.info("[Chat Final Output] Итоговый ответ клиенту:\n%s", final_output)
     logger.info("[Chat] generate_stream completed for comparison_id='%s'", comparison_id)
