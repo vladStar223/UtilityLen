@@ -14,6 +14,7 @@ class AppColors {
   static const Color textPrimary    = Color(0xFF171735); // Основной текст
   static const Color textSecondary  = Color(0xFF777895); // Вторичный текст
   static const Color critical       = Color(0xFFEF476F); // Критическая ошибка
+  static const Color error          = critical;
   static const Color warning        = Color(0xFFFFB938); // Предупреждение
   static const Color success        = Color(0xFF24B47E); // Успешный результат
   static const Color border         = Color(0xFFE7E6F2); // Границы
