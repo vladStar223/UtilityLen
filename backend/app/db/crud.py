@@ -93,6 +93,8 @@ def save_bill(db: Session, bill_doc: BillDocument, user_id: Optional[str] = None
                 tariff=_dec(line.tariff, "0"),
                 total=_dec(line.total, "0"),
                 coefficient=_dec(line.coefficient, "1"),
+                recalculation=_dec(line.recalculation, "0"),
+                penalty=_dec(line.penalty, "0"),
             )
         )
 
@@ -170,8 +172,8 @@ def bill_to_document(bill: Bill) -> BillDocument:
                 volume=float(svc.volume),
                 tariff=float(svc.tariff),
                 coefficient=float(svc.coefficient) if svc.coefficient is not None else 1.0,
-                recalculation=0.0,
-                penalty=0.0,
+                recalculation=float(svc.recalculation) if getattr(svc, "recalculation", None) is not None else 0.0,
+                penalty=float(svc.penalty) if getattr(svc, "penalty", None) is not None else 0.0,
                 total=float(svc.total),
             )
         )
@@ -243,7 +245,10 @@ def save_comparison(
         delta_pct=_dec(report.summary.delta_pct),
         status_level=report.summary.status_level,
         factor_breakdown=report.factor_breakdown.model_dump(mode="json"),
-        summary_data=report.summary.model_dump(mode="json"),
+        summary_data={
+            **report.summary.model_dump(mode="json"),
+            "items": [it.model_dump(mode="json") for it in report.items],
+        },
     )
 
     for anomaly in report.anomalies:

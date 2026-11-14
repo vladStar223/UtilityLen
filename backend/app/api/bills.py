@@ -142,12 +142,19 @@ def _get_comparison_report(db: Session, comparison_id: str) -> Optional[Comparis
         )
         for a in cmp.anomalies
     ]
+    stored_items: List[ServiceItem] = []
+    summary_dict = dict(cmp.summary_data or {})
+    if "items" in summary_dict:
+        raw_items = summary_dict.pop("items")
+        if isinstance(raw_items, list):
+            stored_items = [ServiceItem(**it) for it in raw_items if isinstance(it, dict)]
+
     return ComparisonReport(
         comparison_id=cmp.comparison_id,
-        summary=SummaryReport(**cmp.summary_data),
+        summary=SummaryReport(**summary_dict),
         factor_breakdown=FactorBreakdown(**cmp.factor_breakdown),
         anomalies=anomalies,
-        items=[],
+        items=stored_items,
     )
 
 
@@ -186,6 +193,14 @@ async def upload_bill(
             content=content,
             filename=file.filename or "bill",
             mime_type=file.content_type or "",
+        )
+    except ValueError as exc:
+        logger.warning("Invalid bill document '%s': %s", file.filename, exc)
+        err_msg = str(exc)
+        detail_msg = err_msg if "не удалось" in err_msg.lower() else f"Не удалось обработать квитанцию: {err_msg}"
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail_msg,
         )
     except Exception as exc:
         logger.warning("Failed to parse bill file '%s': %s", file.filename, exc)

@@ -53,6 +53,11 @@ class JsonBillParser:
                 raw_data = raw_data[envelope_key]
                 break
 
+        if "services" not in raw_data and "total_amount" not in raw_data and "period" not in raw_data:
+            raise ValueError(
+                "Загруженный JSON-файл не является квитанцией ЖКХ: отсутствуют обязательные реквизиты и список начислений."
+            )
+
         return BillDocument.model_validate(raw_data)
 
 

@@ -66,6 +66,13 @@ def _migrate_columns() -> None:
                         logger.info("Migrating database: adding missing column users.%s", col_name)
                         conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} VARCHAR"))
                         conn.commit()
+            if "bill_services" in inspector.get_table_names():
+                svc_cols = {col["name"] for col in inspector.get_columns("bill_services")}
+                for col_name in ("recalculation", "penalty"):
+                    if col_name not in svc_cols:
+                        logger.info("Migrating database: adding missing column bill_services.%s", col_name)
+                        conn.execute(text(f"ALTER TABLE bill_services ADD COLUMN {col_name} NUMERIC(10, 2) DEFAULT 0.00"))
+                        conn.commit()
     except Exception as exc:
         from app.core.logging import logger
         logger.warning("Auto-migration note: %s", exc)
