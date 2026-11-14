@@ -69,7 +69,7 @@ class Settings:
         )
         self.LLM_MODEL: str = os.getenv(
             "LLM_MODEL",
-            "deepseek-v3",
+            "gpt-4o-mini",
         )
         self.VISION_LLM_MODEL: str = os.getenv(
             "VISION_LLM_MODEL",

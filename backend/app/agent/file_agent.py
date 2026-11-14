@@ -128,14 +128,14 @@ def _normalize_chat_url(raw_url: Optional[str]) -> str:
     return cleaned
 
 
-def _normalize_model_name(raw_model: Optional[str], default: str = "deepseek-v3") -> str:
+def _normalize_model_name(raw_model: Optional[str], default: str = "gpt-4o-mini") -> str:
     if not raw_model:
         return default
     m = raw_model.strip()
     if m.startswith("gptunnel/"):
         m = m[len("gptunnel/"):]
-    if "deepseek-v4" in m.lower():
-        m = "deepseek-v3"
+    if "deepseek" in m.lower():
+        return "gpt-4o-mini"
     return m
 
 

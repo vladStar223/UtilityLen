@@ -61,14 +61,15 @@ def _normalize_chat_url(raw_url: Optional[str]) -> Optional[str]:
     return cleaned
 
 
-def _normalize_model_name(raw_model: Optional[str], default: str = "deepseek-v3") -> str:
+def _normalize_model_name(raw_model: Optional[str], default: str = "gpt-4o-mini") -> str:
     if not raw_model:
         return default
     m = raw_model.strip()
     if m.startswith("gptunnel/"):
         m = m[len("gptunnel/"):]
-    if "deepseek-v4" in m.lower():
-        m = "deepseek-v3"
+    if "deepseek" in m.lower():
+        # Fall back to gpt-4o-mini if DeepSeek is not available or non-existent on account
+        return "gpt-4o-mini"
     return m
 
 
@@ -76,8 +77,8 @@ def _get_llm_credentials():
     api_key = os.getenv("LLM_API_KEY") or os.getenv("GPTUNNEL_API_KEY")
     url = _normalize_chat_url(os.getenv("LLM_API_URL") or os.getenv("GPTUNNEL_BASE_URL"))
     timeout = float(os.getenv("LLM_TIMEOUT_S", "35.0"))
-    raw_model = os.getenv("LLM_MODEL", "deepseek-v3").strip()
-    model = _normalize_model_name(raw_model, default="deepseek-v3")
+    raw_model = os.getenv("LLM_MODEL", "gpt-4o-mini").strip()
+    model = _normalize_model_name(raw_model, default="gpt-4o-mini")
     return api_key if api_key else None, url, timeout, model
 
 
