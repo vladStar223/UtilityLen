@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
-import 'main_scaffold.dart';
+import '../widgets/receipt_upload_bottom_sheet.dart';
 import 'scanner_screen.dart';
 
 class OnboardingScreen extends StatelessWidget {
@@ -93,10 +93,7 @@ class OnboardingScreen extends StatelessWidget {
 
               OutlinedButton.icon(
                 onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const MainScaffold()),
-                  );
+                  ReceiptUploadBottomSheet.show(context);
                 },
                 style: OutlinedButton.styleFrom(
                   backgroundColor: AppColors.darkSurface.withValues(alpha: 0.6),
@@ -110,10 +107,7 @@ class OnboardingScreen extends StatelessWidget {
 
               TextButton(
                 onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const MainScaffold()),
-                  );
+                  ReceiptUploadBottomSheet.show(context);
                 },
                 child: const Text(
                   'Пример квитанции →',

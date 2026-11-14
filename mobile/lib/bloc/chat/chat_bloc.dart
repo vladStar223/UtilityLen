@@ -39,7 +39,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ));
 
     try {
-      final stream = apiClient.streamChat('case_02_coeff_15', userText);
+      final targetCmp = event.comparisonId ?? 'case_02_coeff_15';
+      final stream = apiClient.streamChat(targetCmp, userText);
       final botMessage = ChatMessage(text: '', isUser: false);
       final currentList = List<ChatMessage>.from(updatedMessages)..add(botMessage);
       var fullBotText = '';
@@ -72,7 +73,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     SelectQuickPromptEvent event,
     Emitter<ChatState> emit,
   ) {
-    add(SendMessageEvent(event.prompt));
+    add(SendMessageEvent(event.prompt, comparisonId: event.comparisonId));
   }
 
   void _onResetChat(

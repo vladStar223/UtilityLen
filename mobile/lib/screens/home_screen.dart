@@ -11,6 +11,7 @@ import 'ai_chat_screen.dart';
 import 'alerts_screen.dart';
 import 'bill_details_screen.dart';
 import 'claim_screen.dart';
+import 'scanner_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final VoidCallback onNavigateToReceipts;
@@ -70,32 +71,50 @@ class HomeScreen extends StatelessWidget {
                           ),
                         ],
                       ),
-                      Stack(
+                      Row(
                         children: [
                           IconButton(
                             icon: const Icon(
-                              Icons.notifications_none_rounded,
-                              color: AppColors.textPrimary,
-                              size: 26,
+                              Icons.qr_code_scanner_rounded,
+                              color: AppColors.primary,
+                              size: 24,
                             ),
+                            tooltip: 'Сканировать квитанцию',
                             onPressed: () {
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(builder: (_) => const AlertsScreen()),
+                                MaterialPageRoute(builder: (_) => const ScannerScreen()),
                               );
                             },
                           ),
-                          Positioned(
-                            right: 12,
-                            top: 12,
-                            child: Container(
-                              width: 8,
-                              height: 8,
-                              decoration: const BoxDecoration(
-                                color: AppColors.critical,
-                                shape: BoxShape.circle,
+                          Stack(
+                            children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.notifications_none_rounded,
+                                  color: AppColors.textPrimary,
+                                  size: 26,
+                                ),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => const AlertsScreen()),
+                                  );
+                                },
                               ),
-                            ),
+                              Positioned(
+                                right: 12,
+                                top: 12,
+                                child: Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.critical,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

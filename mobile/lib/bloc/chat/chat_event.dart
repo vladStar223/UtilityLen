@@ -9,18 +9,20 @@ abstract class ChatEvent extends Equatable {
 
 class SendMessageEvent extends ChatEvent {
   final String text;
-  const SendMessageEvent(this.text);
+  final String? comparisonId;
+  const SendMessageEvent(this.text, {this.comparisonId});
 
   @override
-  List<Object?> get props => [text];
+  List<Object?> get props => [text, comparisonId];
 }
 
 class SelectQuickPromptEvent extends ChatEvent {
   final String prompt;
-  const SelectQuickPromptEvent(this.prompt);
+  final String? comparisonId;
+  const SelectQuickPromptEvent(this.prompt, {this.comparisonId});
 
   @override
-  List<Object?> get props => [prompt];
+  List<Object?> get props => [prompt, comparisonId];
 }
 
 class ResetChatEvent extends ChatEvent {}

@@ -57,27 +57,34 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
         MonthlyTrendItem(monthLabel: 'Ноя', amount: 6890.5),
       ];
 
-      const alerts = [
+      final overpaymentAmount = report.anomalies.isNotEmpty
+          ? report.anomalies.first.impactRub
+          : 245.18;
+      final overpaymentDesc = report.anomalies.isNotEmpty
+          ? report.anomalies.first.hint
+          : 'Возможная переплата за ХВС с коэффициентом 1.5';
+
+      final alerts = [
         AlertNotificationItem(
           id: 'alert_critical_1',
           title: '1 критическая проблема',
-          description: 'Возможная переплата за ХВС с коэффициентом 1.5',
+          description: overpaymentDesc,
           severity: 'critical',
-          amount: 245.18,
+          amount: overpaymentAmount,
         ),
-        AlertNotificationItem(
+        const AlertNotificationItem(
           id: 'alert_meter_warning',
           title: 'Срок поверки счётчика',
           description: 'Поверка истекает через 2 месяца',
           severity: 'warning',
         ),
-        AlertNotificationItem(
+        const AlertNotificationItem(
           id: 'alert_norm_ok',
           title: 'Начисления в норме',
           description: 'По остальным услугам отклонений не найдено',
           severity: 'success',
         ),
-        AlertNotificationItem(
+        const AlertNotificationItem(
           id: 'alert_protection',
           title: 'Ваша защита активна',
           description: 'Мы автоматически проверяем квитанции на соответствие нормативам Владивостока и ПП РФ № 354',

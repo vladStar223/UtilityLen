@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../bloc/audit/audit_bloc.dart';
 import '../bloc/chat/chat_bloc.dart';
 import '../bloc/chat/chat_event.dart';
 import '../bloc/chat/chat_state.dart';
@@ -161,7 +162,8 @@ class _AiChatScreenState extends State<AiChatScreen> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                         onPressed: () {
-                          context.read<ChatBloc>().add(SelectQuickPromptEvent(prompt));
+                          final cmpId = context.read<AuditBloc>().state.report?.comparisonId;
+                          context.read<ChatBloc>().add(SelectQuickPromptEvent(prompt, comparisonId: cmpId));
                         },
                       );
                     },
@@ -232,7 +234,8 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   void _handleSubmit(String text) {
     if (text.trim().isEmpty) return;
-    context.read<ChatBloc>().add(SendMessageEvent(text));
+    final cmpId = context.read<AuditBloc>().state.report?.comparisonId;
+    context.read<ChatBloc>().add(SendMessageEvent(text, comparisonId: cmpId));
     _textController.clear();
   }
 
