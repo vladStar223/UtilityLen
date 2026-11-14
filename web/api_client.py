@@ -65,7 +65,30 @@ class ApiClient:
         return self._mock_cases()
 
     def get_user_profile(self) -> Dict[str, Any]:
-        """Mock profile implementation."""
+        """Fetch user profile from backend with fallback."""
+        if not self.use_mock:
+            try:
+                response = httpx.get(
+                    f"{self.api_base_url}/api/v1/user/profile",
+                    headers=self._get_headers(),
+                    timeout=5.0,
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    first_name = data.get("first_name") or ""
+                    last_name = data.get("last_name") or ""
+                    full_name = f"{first_name} {last_name}".strip() or data.get("username", "Иван Иванов")
+                    return {
+                        "name": full_name,
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "phone": data.get("phone") or "+7 (999) 000-00-00",
+                        "email": data.get("email") or "ivan.ivanov@example.com",
+                        "address": data.get("address") or "г. Владивосток, ул. Светланская, д. 45, кв. 12",
+                        "account": data.get("personal_account") or "40702810100000001234",
+                    }
+            except Exception as exc:
+                logger.error("Failed to fetch user profile: %s", exc)
         return {
             "name": "Иван Иванов",
             "phone": "+7 (999) 000-00-00",
@@ -75,7 +98,25 @@ class ApiClient:
         }
 
     def get_user_stats(self) -> Dict[str, Any]:
-        """Mock statistics implementation."""
+        """Fetch aggregated user statistics from backend with fallback."""
+        if not self.use_mock:
+            try:
+                response = httpx.get(
+                    f"{self.api_base_url}/api/v1/user/stats",
+                    headers=self._get_headers(),
+                    timeout=5.0,
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    return {
+                        "total_bills": data.get("total_bills", 0),
+                        "total_amount": data.get("total_amount_rub", 0.0),
+                        "anomalies_found": data.get("anomalies_detected", 0),
+                        "savings_potential": data.get("overpayment_identified_rub", 0.0),
+                        "average_monthly_bill_rub": data.get("average_monthly_bill_rub", 0.0),
+                    }
+            except Exception as exc:
+                logger.error("Failed to fetch user stats: %s", exc)
         return {
             "total_bills": 142,
             "total_amount": 785400.0,
@@ -84,7 +125,30 @@ class ApiClient:
         }
 
     def update_user_profile(self, data: Dict[str, Any]) -> bool:
-        """Mock profile update implementation."""
+        """Update user profile on backend."""
+        if not self.use_mock:
+            try:
+                name_parts = data.get("name", "").strip().split(maxsplit=1)
+                first_name = name_parts[0] if name_parts else ""
+                last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+                payload = {
+                    "first_name": first_name or data.get("first_name"),
+                    "last_name": last_name or data.get("last_name"),
+                    "phone": data.get("phone"),
+                    "address": data.get("address"),
+                    "personal_account": data.get("account") or data.get("personal_account"),
+                }
+                response = httpx.put(
+                    f"{self.api_base_url}/api/v1/user/profile",
+                    json=payload,
+                    headers=self._get_headers(),
+                    timeout=5.0,
+                )
+                return response.status_code == 200
+            except Exception as exc:
+                logger.error("Failed to update user profile: %s", exc)
+                return False
         return True
 
     def compare_bills(self, case_id: str = "case_02_coeff_15") -> Dict[str, Any]:

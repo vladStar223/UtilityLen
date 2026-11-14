@@ -98,6 +98,8 @@ class BillService(Base):
     tariff: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     total: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     coefficient: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("1.00"))
+    recalculation: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"))
+    penalty: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"))
 
     bill: Mapped["Bill"] = relationship(back_populates="services")
 

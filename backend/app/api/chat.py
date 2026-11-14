@@ -9,11 +9,13 @@ from sqlalchemy.orm import Session
 
 from app.agent import tools
 from app.agent.runner import generate_stream
+from app.core.auth import get_current_user_optional
 from app.core.logging import logger
 from app.core.rate_limit import limiter
 from app.core.security import verify_api_key
 from app.db import crud
 from app.db.database import get_db
+from app.db.models import User
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
@@ -108,9 +110,11 @@ class ChatRequest(BaseModel):
 def chat_stream(
     request: Request,
     payload: ChatRequest,
-    owner_id: str = Depends(verify_api_key),
+    api_key_owner: str = Depends(verify_api_key),
+    user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
+    owner_id = user.user_id if user is not None else api_key_owner
     try:
         record = tools.get_report(payload.comparison_id, owner_id)
     except PermissionError:

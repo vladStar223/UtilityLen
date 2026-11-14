@@ -213,3 +213,33 @@ def test_report_owner_scope():
     assert tools.get_report(report.comparison_id, "alice") is not None
     with pytest.raises(PermissionError):
         tools.get_report(report.comparison_id, "bob")
+
+
+def test_report_owner_scope_allows_demo_user():
+    prev = BillDocument.model_validate_json(
+        (CASE_DIR / "prev_bill.json").read_text(encoding="utf-8")
+    )
+    curr = BillDocument.model_validate_json(
+        (CASE_DIR / "curr_bill.json").read_text(encoding="utf-8")
+    )
+    report = analyze(prev, curr)
+    tools.store_comparison(report.comparison_id, report, curr, prev, owner_id="user_demo_01")
+
+    # Both explicit demo and anonymous frontend calls are permitted
+    assert tools.get_report(report.comparison_id, "user_demo_01") is not None
+    assert tools.get_report(report.comparison_id, "anonymous") is not None
+
+
+def test_fallback_answer_with_terminology_query():
+    report = _compute_report()
+    ans = runner.build_fallback_answer(report, "Что такое СОИ?")
+    assert "СОИ" in ans or "общедомовые нужды" in ans.lower()
+    assert "Правовое основание" in ans
+
+
+def test_fallback_answer_with_factor_breakdown_query():
+    report = _compute_report()
+    ans = runner.build_fallback_answer(report, "Почему выросла сумма?")
+    assert "Декомпозиция изменения начислений" in ans
+    assert "Влияние изменения тарифов" in ans
+    assert "Влияние объемов потребления" in ans

@@ -70,7 +70,7 @@ AUDITOR_SYSTEM_PROMPT = """Вы — профессиональный финан�
 
 
 def _clean_json_markdown(text: str) -> str:
-    """Strip markdown code block fences and whitespace from model response."""
+    """Strip markdown code block fences and whitespace from model response, extracting pure JSON."""
     clean = text.strip()
     if clean.startswith("```json"):
         clean = clean[7:]
@@ -78,6 +78,11 @@ def _clean_json_markdown(text: str) -> str:
         clean = clean[3:]
     if clean.endswith("```"):
         clean = clean[:-3]
+    clean = clean.strip()
+    first_brace = clean.find("{")
+    last_brace = clean.rfind("}")
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        clean = clean[first_brace : last_brace + 1]
     return clean.strip()
 
 
@@ -144,8 +149,13 @@ class BillAnalysisAgent:
             "Content-Type": "application/json",
         }
 
-        async with httpx.AsyncClient(timeout=35.0) as client:
+        timeout = float(os.getenv("LLM_TIMEOUT_S", "45.0"))
+        async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code == 400 and "response_format" in payload:
+                # Retry without strict json_object for models that do not support it (e.g. DeepSeek on GPTunnel)
+                payload.pop("response_format", None)
+                resp = await client.post(url, json=payload, headers=headers)
             resp.raise_for_status()
             data = resp.json()
 
@@ -195,8 +205,13 @@ class BillAnalysisAgent:
             "Content-Type": "application/json",
         }
 
-        async with httpx.AsyncClient(timeout=45.0) as client:
+        timeout = float(os.getenv("LLM_TIMEOUT_S", "45.0"))
+        async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code == 400 and "response_format" in payload:
+                # Retry without strict json_object for models that do not support it
+                payload.pop("response_format", None)
+                resp = await client.post(url, json=payload, headers=headers)
             resp.raise_for_status()
             data = resp.json()
 

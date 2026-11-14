@@ -142,12 +142,19 @@ def _get_comparison_report(db: Session, comparison_id: str) -> Optional[Comparis
         )
         for a in cmp.anomalies
     ]
+    stored_items: List[ServiceItem] = []
+    summary_dict = dict(cmp.summary_data or {})
+    if "items" in summary_dict:
+        raw_items = summary_dict.pop("items")
+        if isinstance(raw_items, list):
+            stored_items = [ServiceItem(**it) for it in raw_items if isinstance(it, dict)]
+
     return ComparisonReport(
         comparison_id=cmp.comparison_id,
-        summary=SummaryReport(**cmp.summary_data),
+        summary=SummaryReport(**summary_dict),
         factor_breakdown=FactorBreakdown(**cmp.factor_breakdown),
         anomalies=anomalies,
-        items=[],
+        items=stored_items,
     )
 
 

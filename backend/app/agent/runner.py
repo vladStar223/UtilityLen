@@ -8,12 +8,15 @@ fallback built from ``rules_and_faq.json`` is streamed instead.
 """
 
 import json
+import logging
 import os
 import re
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from app.agent import tools
 from app.core.models import ComparisonReport
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
     "Вы — опытный юрист по жилищному праву Российской Федерации, "
@@ -46,12 +49,23 @@ _ANOMALY_LAW_REF: Dict[str, str] = {
     "OPTIONAL_SERVICE_DETECTED": "ст. 16 ЗоЗПП РФ, ч. 2 ст. 154 ЖК РФ",
 }
 
+def _get_llm_credentials():
+    api_key = os.getenv("LLM_API_KEY") or os.getenv("GPTUNNEL_API_KEY")
+    url = os.getenv("LLM_API_URL")
+    if not url and os.getenv("GPTUNNEL_BASE_URL"):
+        base = os.getenv("GPTUNNEL_BASE_URL", "").rstrip("/")
+        url = f"{base}/chat/completions" if not base.endswith("/chat/completions") else base
+    timeout = float(os.getenv("LLM_TIMEOUT_S", "35.0"))
+    model = os.getenv("LLM_MODEL", "gptunnel/deepseek-v4-pro-tunnelcode")
+    return api_key if api_key else None, url, timeout, model
+
+
 _LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("GPTUNNEL_API_KEY")
 _LLM_API_URL = os.getenv("LLM_API_URL")
 if not _LLM_API_URL and os.getenv("GPTUNNEL_BASE_URL"):
     _base = os.getenv("GPTUNNEL_BASE_URL", "").rstrip("/")
     _LLM_API_URL = f"{_base}/chat/completions" if not _base.endswith("/chat/completions") else _base
-_LLM_TIMEOUT_S = float(os.getenv("LLM_TIMEOUT_S", "3.0"))
+_LLM_TIMEOUT_S = float(os.getenv("LLM_TIMEOUT_S", "35.0"))
 
 _ADDRESS_RE = re.compile(r"г\.\s*[А-Яа-яЁё\-]+[^,]*(?:,\s*[^.]*)?", re.UNICODE)
 _ACCOUNT_RE = re.compile(r"\b\d{10,}\b")
@@ -84,11 +98,56 @@ def sse_event(payload: Dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
-def build_fallback_answer(report: ComparisonReport) -> str:
-    """Build a deterministic offline answer from the report and knowledge base."""
+def build_fallback_answer(report: ComparisonReport, message: str = "") -> str:
+    """Build an intelligent deterministic offline answer from the report and knowledge base."""
     lines: List[str] = []
     summary = report.summary
+    msg_lower = (message or "").lower()
 
+    # 1. Terminology lookup (e.g. "что такое СОИ", "водоотведение", "ОДН")
+    terms_to_check = [
+        "хвс", "гвс", "сои", "одн", "отопление", "электроэнергия",
+        "водоотведение", "сирж", "мусор", "тко", "капремонт"
+    ]
+    matched_term = None
+    for term in terms_to_check:
+        if term in msg_lower:
+            matched_term = term
+            break
+
+    if matched_term and any(q in msg_lower for q in ("что такое", "что за", "поясни", "объясни", "смысл", "расшифруй")):
+        entry = tools.lookup_glossary(matched_term)
+        if entry:
+            lines.append(f"[Факт из нормативов] {entry['name']}: {entry['explanation']}")
+            if entry.get("provider"):
+                lines.append(f"Поставщик в регионе: {entry['provider']}.")
+            if entry.get("law_ref"):
+                lines.append(f"Правовое основание: {entry['law_ref']}.")
+            return "\n".join(lines)
+
+    # 2. Factor breakdown query ("почему выросла сумма", "почему дороже", "тариф или объем", "факторы")
+    if any(w in msg_lower for w in ("почему вырос", "почему дороже", "из-за чего", "фактор", "тариф или объем", "почему так много")):
+        lines.append(
+            f"[Факт из квитанции] Платеж за {summary.curr_period} составил {summary.curr_total:.2f} ₽, "
+            f"изменение к предыдущему периоду — {summary.delta_abs:+.2f} ₽ ({summary.delta_pct:+.2f}%)."
+        )
+        fb = report.factor_breakdown
+        lines.append("[Математический расчет] Декомпозиция изменения начислений:")
+        lines.append(f"- Влияние изменения тарифов: {fb.tariff_effect_rub:+.2f} ₽")
+        lines.append(f"- Влияние объемов потребления: {fb.volume_effect_rub:+.2f} ₽")
+        if fb.recalculation_effect_rub != 0.0:
+            lines.append(f"- Перерасчеты за прошлые периоды: {fb.recalculation_effect_rub:+.2f} ₽")
+        if fb.new_services_effect_rub != 0.0:
+            lines.append(f"- Новые разовые услуги: {fb.new_services_effect_rub:+.2f} ₽")
+        if report.anomalies:
+            for anomaly in report.anomalies:
+                lines.append(f"[Аналитическая гипотеза] Обнаружена аномалия: {anomaly.title} (переплата {anomaly.impact_rub:.2f} ₽).")
+                law_ref = _ANOMALY_LAW_REF.get(anomaly.code)
+                if law_ref:
+                    lines.append(f"Правовое основание: {law_ref}.")
+        return "\n".join(lines)
+
+    # 3. Default or Anomaly-specific response
     if not report.anomalies:
         lines.append(
             f"[Факт из квитанции] Платеж за {summary.curr_period} составил "
@@ -127,6 +186,69 @@ def build_fallback_answer(report: ComparisonReport) -> str:
     return "\n".join(lines)
 
 
+async def _stream_llm(
+    prompt: str,
+    context: str,
+    message: str,
+    history: Optional[List[Dict[str, str]]] = None,
+) -> AsyncIterator[str]:
+    """Stream response tokens from external OpenAI/GPTunnel LLM via Server-Sent Events."""
+    api_key, url, timeout, model = _get_llm_credentials()
+    if not api_key or not url:
+        return
+
+    import httpx
+
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    messages: List[Dict[str, str]] = [{"role": "system", "content": prompt}]
+    for turn in history or []:
+        role = turn.get("role")
+        content = turn.get("content")
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": context})
+    messages.append({"role": "user", "content": message})
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "stream": True,
+        "temperature": 0.2,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            async with client.stream("POST", url, json=payload, headers=headers) as resp:
+                if resp.status_code >= 400:
+                    logger.warning("LLM stream returned HTTP %d, falling back", resp.status_code)
+                    return
+                async for raw_line in resp.aiter_lines():
+                    if not raw_line:
+                        continue
+                    line = raw_line.strip()
+                    if not line.startswith("data:"):
+                        continue
+                    data_str = line[len("data:"):].strip()
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data_str)
+                        choices = chunk.get("choices", [])
+                        if choices:
+                            delta = choices[0].get("delta", {})
+                            token = delta.get("content", "")
+                            if token:
+                                yield token
+                    except Exception:
+                        continue
+    except Exception as exc:
+        logger.warning("LLM streaming call failed (%s), falling back to offline answer.", exc)
+        return
+
+
 async def _call_llm(
     prompt: str,
     context: str,
@@ -134,14 +256,15 @@ async def _call_llm(
     history: Optional[List[Dict[str, str]]] = None,
 ) -> Optional[str]:
     """Best-effort call to an external LLM. Returns None on any failure."""
-    if not _LLM_API_URL or not _LLM_API_KEY:
+    api_key, url, timeout, model = _get_llm_credentials()
+    if not url or not api_key:
         return None
     try:
         import httpx
 
         headers = {"Content-Type": "application/json"}
-        if _LLM_API_KEY:
-            headers["Authorization"] = f"Bearer {_LLM_API_KEY}"
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
         messages: List[Dict[str, str]] = [{"role": "system", "content": prompt}]
         for turn in history or []:
             role = turn.get("role")
@@ -151,11 +274,11 @@ async def _call_llm(
         messages.append({"role": "user", "content": context})
         messages.append({"role": "user", "content": message})
         payload = {
-            "model": os.getenv("LLM_MODEL", "default"),
+            "model": model,
             "messages": messages,
         }
-        async with httpx.AsyncClient(timeout=_LLM_TIMEOUT_S) as client:
-            resp = await client.post(_LLM_API_URL, json=payload, headers=headers)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(url, json=payload, headers=headers)
             resp.raise_for_status()
             data = resp.json()
         content = data.get("choices", [{}])[0].get("message", {}).get("content")
@@ -202,11 +325,24 @@ async def generate_stream(
         f"{sanitized_context}\n"
         "</USER_DATA>"
     )
-    llm_answer = await _call_llm(SYSTEM_PROMPT, data_context, message, history)
 
-    answer = llm_answer if llm_answer else build_fallback_answer(report)
+    api_key, url, _, _ = _get_llm_credentials()
+    stream_successful = False
 
-    for chunk in _chunks(answer):
-        yield sse_event({"type": "token", "content": chunk})
+    # 1. Try real SSE streaming from LLM if configured
+    if api_key and url:
+        try:
+            async for token in _stream_llm(SYSTEM_PROMPT, data_context, message, history):
+                stream_successful = True
+                yield sse_event({"type": "token", "content": token})
+        except Exception as exc:
+            logger.warning("Stream attempt exception: %s", exc)
+
+    # 2. If stream yielded no tokens, fall back to _call_llm or smart fallback
+    if not stream_successful:
+        llm_answer = await _call_llm(SYSTEM_PROMPT, data_context, message, history)
+        answer = llm_answer if llm_answer else build_fallback_answer(report, message)
+        for chunk in _chunks(answer):
+            yield sse_event({"type": "token", "content": chunk})
 
     yield sse_event({"type": "done"})
