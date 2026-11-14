@@ -377,7 +377,17 @@ def get_comparisons_history(
 def get_comparison(
     comparison_id: str,
     db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user_optional),
 ) -> ComparisonReport:
+    active_user = _resolve_user(db, user)
+    cmp = crud.get_comparison(db, comparison_id)
+    if cmp is not None and cmp.user_id is not None:
+        if cmp.user_id != active_user.user_id and cmp.user_id != "user_demo_01":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Доступ к отчёту сравнения запрещён (принадлежит другому пользователю).",
+            )
+
     report = _get_comparison_report(db, comparison_id)
     if report is None:
         raise HTTPException(

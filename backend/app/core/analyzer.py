@@ -132,6 +132,25 @@ def _explain(
     return ("По строке «" + raw_name + "»: " + ", ".join(parts) + ".")
 
 
+def _match_key(line: ServiceLine) -> str:
+    """Return a composite match key distinguishing sub-services (day/night, energy/carrier)."""
+    code = _line_code(line)
+    unit = (line.unit or "").strip().lower()
+    name = (line.raw_name or "").lower()
+    tag = ""
+    if "ночь" in name or "ночн" in name or "т2" in name:
+        tag = ":night"
+    elif "день" in name or "дневн" in name or "т1" in name:
+        tag = ":day"
+    elif "пик" in name or "т3" in name:
+        tag = ":peak"
+    elif "теплоносител" in name:
+        tag = ":carrier"
+    elif "тепловая энерги" in name:
+        tag = ":energy"
+    return f"{code}:{unit}{tag}"
+
+
 def _detect_anomalies(
     curr_bill: BillDocument,
     prev_lines: Dict[str, ServiceLine],
@@ -141,9 +160,7 @@ def _detect_anomalies(
     # Raising coefficients (1.5 / 3.0) applied to a matched service.
     for line in curr_bill.services:
         code = _line_code(line)
-        prev_line = prev_lines.get(code)
-        if prev_line is None:
-            continue
+        prev_line = prev_lines.get(_match_key(line)) or prev_lines.get(code)
         coeff = line.coefficient if line.coefficient else 1.0
         if not (coeff > 1.0):
             continue
@@ -248,7 +265,10 @@ def analyze(prev_bill: BillDocument, curr_bill: BillDocument) -> ComparisonRepor
 
     prev_lines: Dict[str, ServiceLine] = {}
     for line in prev_bill.services:
-        prev_lines[_line_code(line)] = line
+        prev_lines[_match_key(line)] = line
+        code = _line_code(line)
+        if code not in prev_lines:
+            prev_lines[code] = line
 
     items: List[ServiceItem] = []
     tariff_effect = 0.0
@@ -258,7 +278,7 @@ def analyze(prev_bill: BillDocument, curr_bill: BillDocument) -> ComparisonRepor
 
     for line in curr_bill.services:
         code = _line_code(line)
-        prev_line = prev_lines.get(code)
+        prev_line = prev_lines.get(_match_key(line)) or prev_lines.get(code)
 
         if prev_line is not None:
             t1, v1, s1 = prev_line.tariff, prev_line.volume, prev_line.total

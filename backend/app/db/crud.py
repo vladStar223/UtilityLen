@@ -75,6 +75,8 @@ def save_bill(db: Session, bill_doc: BillDocument, user_id: Optional[str] = None
         period=bill_doc.period,
         address=bill_doc.address,
         payer=bill_doc.payer,
+        provider_name=getattr(bill_doc, "provider_name", None),
+        personal_account=getattr(bill_doc, "personal_account", None),
         total_amount=_dec(bill_doc.total_amount),
         qr_data=mask_qr_personal_data(bill_doc.qr_data)
         if bill_doc.qr_data
@@ -214,6 +216,8 @@ def bill_to_document(bill: Bill) -> BillDocument:
         period=bill.period,
         address=bill.address,
         payer=bill.payer,
+        provider_name=getattr(bill, "provider_name", None),
+        personal_account=getattr(bill, "personal_account", None),
         total_amount=float(bill.total_amount),
         qr_data=bill.qr_data,
         qr_sum_rub=float(bill.qr_sum_rub) if bill.qr_sum_rub is not None else None,

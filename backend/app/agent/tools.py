@@ -172,6 +172,48 @@ def get_report(
     """
     data = cache.get_report(comparison_id)
     if data is None:
+        # Graceful database fallback on Redis restart / cache miss
+        try:
+            from app.db.database import SessionLocal
+            from app.db import crud
+            with SessionLocal() as db_session:
+                cmp = crud.get_comparison(db_session, comparison_id)
+                if cmp is not None:
+                    curr_doc = None
+                    prev_doc = None
+                    if cmp.curr_bill_id:
+                        curr_b = crud.get_bill(db_session, cmp.curr_bill_id)
+                        if curr_b:
+                            curr_doc = crud.bill_to_document(curr_b)
+                    if cmp.prev_bill_id:
+                        prev_b = crud.get_bill(db_session, cmp.prev_bill_id)
+                        if prev_b:
+                            prev_doc = crud.bill_to_document(prev_b)
+                    if curr_doc:
+                        from app.core.analyzer import analyze
+                        from app.services.comparison_service import _run_normative_audit
+                        if prev_doc:
+                            rep = analyze(prev_doc, curr_doc)
+                        else:
+                            rep = _run_normative_audit(curr_doc)
+                        rep.comparison_id = cmp.comparison_id
+                        store_comparison(
+                            comparison_id,
+                            rep,
+                            curr_doc,
+                            prev_doc or curr_doc,
+                            owner_id=cmp.user_id,
+                        )
+                        data = {
+                            "owner_id": cmp.user_id,
+                            "report": rep.model_dump(mode="json"),
+                            "curr_bill": curr_doc.model_dump(mode="json"),
+                            "prev_bill": (prev_doc or curr_doc).model_dump(mode="json"),
+                        }
+        except Exception:
+            pass
+
+    if data is None:
         return None
     stored_owner = data.get("owner_id")
     if stored_owner is not None and owner_id is not None and stored_owner != owner_id:

@@ -6,9 +6,11 @@ container is up) the module transparently falls back to an in-memory dict so
 that nothing breaks without Redis.
 """
 
+import collections
 import json
 import logging
-from typing import Any, Dict, Optional
+import time
+from typing import Any, Dict, Optional, Tuple
 
 try:
     import redis
@@ -20,30 +22,41 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 DEFAULT_TTL = 86400  # 24 hours, in seconds.
+MAX_FALLBACK_ITEMS = 1000
+RECONNECT_INTERVAL_SECONDS = 10.0
 
 _client: Optional[Any] = None
 _client_initialized = False
+_last_connect_attempt = 0.0
 
-#: In-memory fallback used when Redis is not available.
-_fallback: Dict[str, str] = {}
+#: In-memory fallback used when Redis is not available: key -> (expires_at, payload)
+_fallback: collections.OrderedDict[str, Tuple[float, str]] = collections.OrderedDict()
 
 
 def _redis_client() -> Optional[Any]:
-    global _client, _client_initialized
-    if _client_initialized:
+    global _client, _client_initialized, _last_connect_attempt
+    now = time.time()
+    if _client_initialized and _client is not None:
         return _client
+    if _client_initialized and (now - _last_connect_attempt) < RECONNECT_INTERVAL_SECONDS:
+        return None
+
     _client_initialized = True
+    _last_connect_attempt = now
+
     if redis is None:
         logger.debug("Redis package not installed; using in-memory fallback.")
         _client = None
         return _client
     try:
-        _client = redis.Redis.from_url(
+        candidate = redis.Redis.from_url(
             settings.REDIS_URL,
             socket_connect_timeout=1,
             socket_timeout=1,
         )
-        _client.ping()
+        candidate.ping()
+        _client = candidate
+        logger.info("Connected to Redis at %s", settings.REDIS_URL)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Redis unavailable (%s); using in-memory fallback.", exc)
         _client = None
@@ -63,7 +76,12 @@ def set_report(comparison_id: str, data: Any, ttl: int = DEFAULT_TTL) -> None:
         except Exception as exc:  # noqa: BLE001
             logger.warning("Redis set failed (%s); using in-memory fallback.", exc)
 
-    _fallback[key] = payload
+    # In-memory fallback with bounded capacity & TTL
+    expires_at = time.time() + ttl
+    _fallback[key] = (expires_at, payload)
+    _fallback.move_to_end(key)
+    while len(_fallback) > MAX_FALLBACK_ITEMS:
+        _fallback.popitem(last=False)
 
 
 def get_report(comparison_id: str) -> Optional[Any]:
@@ -79,7 +97,14 @@ def get_report(comparison_id: str) -> Optional[Any]:
         except Exception as exc:  # noqa: BLE001
             logger.warning("Redis get failed (%s); using in-memory fallback.", exc)
 
-    raw = _fallback.get(key)
-    if raw is None:
+    entry = _fallback.get(key)
+    if entry is None:
         return None
-    return json.loads(raw)
+
+    expires_at, payload = entry
+    if time.time() > expires_at:
+        del _fallback[key]
+        return None
+
+    _fallback.move_to_end(key)
+    return json.loads(payload)

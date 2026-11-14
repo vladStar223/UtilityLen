@@ -62,6 +62,8 @@ class Bill(Base):
     period: Mapped[str] = mapped_column(String)
     address: Mapped[str] = mapped_column(String)
     payer: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    provider_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    personal_account: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     qr_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     qr_sum_rub: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)

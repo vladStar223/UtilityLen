@@ -66,6 +66,13 @@ def _migrate_columns() -> None:
                         logger.info("Migrating database: adding missing column users.%s", col_name)
                         conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} VARCHAR"))
                         conn.commit()
+            if "bills" in inspector.get_table_names():
+                bill_cols = {col["name"] for col in inspector.get_columns("bills")}
+                for col_name in ("provider_name", "personal_account"):
+                    if col_name not in bill_cols:
+                        logger.info("Migrating database: adding missing column bills.%s", col_name)
+                        conn.execute(text(f"ALTER TABLE bills ADD COLUMN {col_name} VARCHAR"))
+                        conn.commit()
             if "bill_services" in inspector.get_table_names():
                 svc_cols = {col["name"] for col in inspector.get_columns("bill_services")}
                 for col_name in ("recalculation", "penalty"):

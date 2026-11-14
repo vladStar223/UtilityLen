@@ -276,8 +276,9 @@ def _normalize_bill_dict(data: Any) -> Dict[str, Any]:
                 resolved_code = normalize_service_code(s_name)
 
         s_unit = s.get("unit") or s.get("единица") or "руб"
+        raw_vol = s.get("volume") if s.get("volume") is not None else s.get("объем")
         try:
-            s_vol = float(s.get("volume") or s.get("объем") or 1.0)
+            s_vol = float(raw_vol) if raw_vol is not None and str(raw_vol).strip() != "" else 1.0
         except (ValueError, TypeError):
             s_vol = 1.0
         try:

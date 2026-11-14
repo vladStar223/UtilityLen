@@ -76,7 +76,13 @@ def update_user_profile(
     db: Session = Depends(get_db),
     user: Optional[User] = Depends(get_current_user_optional),
 ) -> UserProfileResponse:
-    active_user = _resolve_user(db, user)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Для изменения профиля требуется авторизация",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    active_user = user
     updated_user = crud.update_user_profile(
         db,
         active_user,
