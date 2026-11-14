@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'bloc/audit/audit_bloc.dart';
+import 'bloc/audit/audit_event.dart';
+import 'bloc/chat/chat_bloc.dart';
+import 'bloc/profile/profile_bloc.dart';
+import 'core/api_client.dart';
 import 'core/theme.dart';
-import 'screens/home_scanner_screen.dart';
+import 'screens/onboarding_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -9,6 +15,13 @@ void main() {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+    ),
+  );
+
   runApp(const UtilityLensApp());
 }
 
@@ -17,11 +30,27 @@ class UtilityLensApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'UtilityLens Mobile',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
-      home: const HomeScannerScreen(),
+    final apiClient = ApiClient();
+
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<AuditBloc>(
+          create: (_) => AuditBloc(apiClient: apiClient)
+            ..add(const LoadAuditDataEvent(caseId: 'case_02_coeff_15')),
+        ),
+        BlocProvider<ChatBloc>(
+          create: (_) => ChatBloc(apiClient: apiClient),
+        ),
+        BlocProvider<ProfileBloc>(
+          create: (_) => ProfileBloc(),
+        ),
+      ],
+      child: MaterialApp(
+        title: 'UtilityLens',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        home: const OnboardingScreen(),
+      ),
     );
   }
 }
