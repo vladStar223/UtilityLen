@@ -23,13 +23,15 @@ class HomeScreen extends StatelessWidget {
     return BlocBuilder<AuditBloc, AuditState>(
       builder: (context, state) {
         final report = state.report;
-        final currentAmount = report?.summary.currTotal ?? 6890.50;
-        final previousAmount = report?.summary.prevTotal ?? 5420.00;
-        final deltaPercent = report?.summary.deltaPct ?? 27.1;
-        final deltaAmount = report?.summary.deltaAbs ?? 1470.50;
-        final overpayment = report?.anomalies.isNotEmpty == true
+        final hasReport = report != null;
+        final currentAmount = report?.summary.currTotal ?? 0.0;
+        final previousAmount = report?.summary.prevTotal ?? 0.0;
+        final deltaPercent = report?.summary.deltaPct ?? 0.0;
+        final deltaAmount = report?.summary.deltaAbs ?? 0.0;
+        final overpayment = (report?.anomalies.isNotEmpty ?? false)
             ? report!.anomalies.first.impactRub
-            : 245.18;
+            : 0.0;
+        final hasAnomaly = (report?.anomalies.isNotEmpty ?? false);
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -126,71 +128,86 @@ class HomeScreen extends StatelessWidget {
                   _buildPeriodSelector(context, state.selectedPeriod),
                   const SizedBox(height: 16),
 
-                  // Hero card
-                  HeroBillCard(
-                    currentAmount: currentAmount,
-                    previousAmount: previousAmount,
-                    deltaPercent: deltaPercent,
-                    deltaAmount: deltaAmount,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const BillDetailsScreen()),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
+                  if (!hasReport)
+                    _buildEmptyReportState(context)
+                  else ...[
+                    // Hero card
+                    HeroBillCard(
+                      currentAmount: currentAmount,
+                      previousAmount: previousAmount,
+                      deltaPercent: deltaPercent,
+                      deltaAmount: deltaAmount,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const BillDetailsScreen()),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
 
-                  // Anomaly alert banner
-                  AnomalyBanner(
-                    amount: overpayment,
-                    title: 'Обнаружена возможная переплата',
-                    subtitle: 'Применён повышающий коэффициент 1,5 по ХВС. Требуется проверка.',
-                    onTap: () => _openAnomalyModal(context, overpayment),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // Big CTA Button: Разобраться с проблемой
-                  ElevatedButton.icon(
-                    onPressed: () => _openAnomalyModal(context, overpayment),
-                    icon: const Icon(Icons.auto_awesome_rounded, size: 20),
-                    label: const Text('Разобраться с проблемой'),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Recent receipts section
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Последние квитанции',
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
+                    // Anomaly alert banner — только при наличии аномалии в отчёте.
+                    if (hasAnomaly) ...[
+                      AnomalyBanner(
+                        amount: overpayment,
+                        title: report!.anomalies.first.title.isNotEmpty
+                            ? report.anomalies.first.title
+                            : 'Обнаружена возможная переплата',
+                        subtitle: report.anomalies.first.hint.isNotEmpty
+                            ? report.anomalies.first.hint
+                            : 'Требуется проверка начислений.',
+                        onTap: () => _openAnomalyModal(context, overpayment),
                       ),
-                      TextButton(
-                        onPressed: onNavigateToReceipts,
-                        child: const Text(
-                          'Все →',
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                      const SizedBox(height: 18),
+
+                      // Big CTA Button: Разобраться с проблемой
+                      ElevatedButton.icon(
+                        onPressed: () => _openAnomalyModal(context, overpayment),
+                        icon: const Icon(Icons.auto_awesome_rounded, size: 20),
+                        label: const Text('Разобраться с проблемой'),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+
+                    // Recent receipts section — показываем только если есть история.
+                    if (state.history.isNotEmpty) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Последние квитанции',
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: onNavigateToReceipts,
+                            child: const Text(
+                              'Все →',
+                              style: TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      for (final rec in state.history.take(3))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _buildReceiptTile(
+                            month: rec.period,
+                            amount:
+                                '${_formatRubAmount(rec.totalAmount)} ₽',
+                            onTap: onNavigateToReceipts,
                           ),
                         ),
-                      ),
                     ],
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Receipt history row
-                  _buildReceiptTile(
-                    month: 'Октябрь 2026',
-                    amount: '5 420,00 ₽',
-                    onTap: onNavigateToReceipts,
-                  ),
+                  ],
                   const SizedBox(height: 16),
                 ],
               ),
@@ -280,6 +297,77 @@ class HomeScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  Widget _buildEmptyReportState(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: FintechDecorations.card(radius: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.receipt_long_rounded,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Пока нет данных для аудита',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Загрузите первую квитанцию, чтобы увидеть сумму к оплате, динамику и возможные переплаты.',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ScannerScreen()),
+              );
+            },
+            icon: const Icon(Icons.camera_alt_rounded, size: 20),
+            label: const Text('Загрузить квитанцию'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatRubAmount(double val) {
+    final parts = val.toStringAsFixed(2).split('.');
+    final integerPart = parts[0].replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]} ',
+    );
+    return '$integerPart,${parts[1]}';
   }
 
   Widget _buildReceiptTile({

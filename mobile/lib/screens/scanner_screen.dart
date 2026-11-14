@@ -1,11 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import '../bloc/audit/audit_bloc.dart';
-import '../bloc/audit/audit_event.dart';
 import '../core/permission_service.dart';
 import '../core/theme.dart';
-import '../widgets/receipt_upload_bottom_sheet.dart';
-import 'main_scaffold.dart';
 import 'receipt_viewer_screen.dart';
 
 /// Экран фотосъемки и сканирования квитанции ЖКХ (без QR-кодов, прямой захват документа)
@@ -19,7 +14,6 @@ class ScannerScreen extends StatefulWidget {
 class _ScannerScreenState extends State<ScannerScreen>
     with SingleTickerProviderStateMixin {
   bool _torchOn = false;
-  bool _isProcessing = false;
   late AnimationController _animController;
 
   @override
@@ -71,126 +65,6 @@ class _ScannerScreenState extends State<ScannerScreen>
     }
   }
 
-  Future<void> _simulateFastCapture() async {
-    if (_isProcessing) return;
-    setState(() {
-      _isProcessing = true;
-    });
-
-    await Future.delayed(const Duration(milliseconds: 700));
-    if (!mounted) return;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isDismissible: false,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppColors.success.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_circle_rounded,
-                    color: AppColors.success,
-                    size: 26,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Квитанция успешно захвачена!',
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        'Данные распознаны · Приморский водоканал',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: const Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Поставщик:', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                      Text('КГУП «Примводоканал»', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
-                    ],
-                  ),
-                  SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Адрес:', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                      Text('ул. Амурская, д. 7', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
-                    ],
-                  ),
-                  SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Сумма к оплате:', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                      Text('1 437,50 ₽', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 16)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                context.read<AuditBloc>().add(const LoadAuditDataEvent(caseId: 'case_04_vladivostok_coeff3'));
-                Navigator.pop(ctx);
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MainScaffold()),
-                );
-              },
-              child: const Text('Перейти к результатам аудита'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    setState(() {
-      _isProcessing = false;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -329,10 +203,10 @@ class _ScannerScreenState extends State<ScannerScreen>
                               color: Colors.black54,
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            child: Text(
-                              _isProcessing ? 'Обработка...' : 'Нажмите для\nфотосъемки',
+                            child: const Text(
+                              'Нажмите для\nфотосъемки',
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -347,7 +221,7 @@ class _ScannerScreenState extends State<ScannerScreen>
 
                 const Spacer(),
 
-                // Bottom actions row: Gallery, Big Shutter, Samples
+                // Bottom actions row: Gallery, Big Shutter
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                   child: Row(
@@ -407,41 +281,9 @@ class _ScannerScreenState extends State<ScannerScreen>
                         ),
                       ),
 
-                      // Samples button
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            onPressed: () => ReceiptUploadBottomSheet.show(context),
-                            iconSize: 28,
-                            style: IconButton.styleFrom(
-                              backgroundColor: const Color(0xFF232033),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.all(12),
-                            ),
-                            icon: const Icon(Icons.folder_special_rounded),
-                          ),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Образцы',
-                            style: TextStyle(color: Colors.white70, fontSize: 12),
-                          ),
-                        ],
-                      ),
+                      // Пустой слот для симметрии колонок
+                      const SizedBox(width: 52),
                     ],
-                  ),
-                ),
-
-                // Fast test hint button
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: TextButton.icon(
-                    onPressed: _simulateFastCapture,
-                    icon: const Icon(Icons.flash_auto_rounded, size: 16, color: Colors.white60),
-                    label: const Text(
-                      'Демо-захват квитанции Владивостока',
-                      style: TextStyle(color: Colors.white60, fontSize: 12),
-                    ),
                   ),
                 ),
               ],

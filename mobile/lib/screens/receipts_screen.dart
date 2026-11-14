@@ -15,17 +15,7 @@ class ReceiptsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<AuditBloc, AuditState>(
       builder: (context, state) {
-        final list = [
-          const ReceiptHistoryItem(
-            id: 'rec_nov_2026',
-            period: 'Ноябрь 2026',
-            totalAmount: 6890.50,
-            providerName: 'Примводоканал · ДЭК',
-            hasOverpayment: true,
-            overpaymentAmount: 245.18,
-          ),
-          ...state.history,
-        ];
+        final list = state.history;
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -41,17 +31,71 @@ class ReceiptsScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            itemCount: list.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (ctx, i) {
-              final item = list[i];
-              return _buildReceiptCard(context, item, i);
-            },
-          ),
+          body: list.isEmpty
+              ? _buildEmptyState(context)
+              : ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  itemCount: list.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (ctx, i) {
+                    final item = list[i];
+                    return _buildReceiptCard(context, item, i);
+                  },
+                ),
         );
       },
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                shape: BoxShape.circle,
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.receipt_long_rounded,
+                  color: AppColors.primary,
+                  size: 32,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Пока нет квитанций',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Загрузите первую квитанцию, чтобы начать аудит начислений ЖКХ.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () => ReceiptUploadBottomSheet.show(context),
+              icon: const Icon(Icons.add_rounded, size: 20),
+              label: const Text('Загрузить квитанцию'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -99,14 +143,19 @@ class ReceiptsScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      item.providerName,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
+                    Expanded(
+                      child: Text(
+                        item.providerName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
-                    if (item.hasOverpayment)
+                    if (item.hasOverpayment) ...[
+                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
@@ -122,6 +171,7 @@ class ReceiptsScreen extends StatelessWidget {
                           ),
                         ),
                       ),
+                    ],
                   ],
                 ),
               ],

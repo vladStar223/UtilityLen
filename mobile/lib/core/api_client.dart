@@ -103,36 +103,28 @@ class ApiClient {
     ];
   }
 
-  /// Запуск факторного анализа по кейсу
+  /// Запуск факторного анализа по кейсу.
+  /// Реальные данные берутся только с бэкенда. При ошибке бросаем исключение —
+  /// никаких моков в клиенте.
   Future<ComparisonReport> compareBills({String caseId = "case_02_coeff_15"}) async {
-    try {
-      final targetCase = (caseId == "case_04_vladivostok_coeff3") ? "case_02_coeff_15" : caseId;
-      final response = await http
-          .post(
-            Uri.parse(ApiConfig.compareEndpoint),
-            headers: {"Content-Type": "application/json"},
-            body: json.encode({"case_id": targetCase}),
-          )
-          .timeout(const Duration(seconds: 8));
+    final response = await http
+        .post(
+          Uri.parse(ApiConfig.compareEndpoint),
+          headers: {"Content-Type": "application/json"},
+          body: json.encode({"case_id": caseId}),
+        )
+        .timeout(const Duration(seconds: 15));
 
-      if (response.statusCode == 200) {
-        final data = json.decode(utf8.decode(response.bodyBytes));
-        final report = ComparisonReport.fromJson(data);
-        _lastComparisonId = report.comparisonId;
-        if (caseId == "case_04_vladivostok_coeff3") {
-          return _buildVladivostokRealCase(comparisonId: report.comparisonId);
-        }
-        return report;
-      }
-    } catch (_) {
-      // Offline fallback
+    if (response.statusCode == 200) {
+      final data = json.decode(utf8.decode(response.bodyBytes));
+      final report = ComparisonReport.fromJson(data);
+      _lastComparisonId = report.comparisonId;
+      return report;
     }
 
-    if (caseId == "case_04_vladivostok_coeff3") {
-      return _buildVladivostokRealCase();
-    }
-
-    return _buildMockReport(caseId);
+    throw Exception(
+      'Сервер вернул ошибку (${response.statusCode}) при сравнении кейса "$caseId"',
+    );
   }
 
   /// Потоковый диалог с AI-юристом (SSE)
@@ -204,154 +196,5 @@ class ApiClient {
     } catch (_) {}
 
     yield "AI-юрист временно недоступен: сервер не отвечает или не настроен API-ключ нейросети. Проверьте соединение с бэкендом.";
-  }
-
-  String _generateSmartLegalAnswer(String query) {
-    final q = query.toLowerCase();
-    if (q.contains('1,5') || q.contains('1.5') || q.contains('коэф') || q.contains('законн')) {
-      return '[Факт из квитанции] По ХВС начислен штрафной коэффициент 1.5 на сумму 245,18 ₽.\n\n'
-          '[Математический расчет] Сумма переплаты без коэффициента составляет 245,18 ₽.\n\n'
-          '[Аналитическая гипотеза] Согласно п. 60(1) ПП РФ № 354, применение повышающего коэффициента '
-          'незаконно, если управляющая компания не составила двухсторонний акт о недопуске к прибору учета. '
-          'Рекомендуется подать досудебную претензию с требованием перерасчета по ст. 157 ЖК РФ.';
-    }
-    if (q.contains('почему') || q.contains('вырос') || q.contains('сумм')) {
-      return '[Факт из квитанции] Общая сумма квитанции выросла на +27,1% (+1 470,50 ₽).\n\n'
-          '[Математический расчет] Основной прирост: холодное водоснабжение (+127% / +411,54 ₽) из-за штрафного коэффициента 1.5, '
-          'а также сезонный рост отопления (+38%).\n\n'
-          '[Аналитическая гипотеза] Рекомендуем оспорить начисление коэффициента 1.5 и запросить перерасчет в УК.';
-    }
-    if (q.contains('претенз') || q.contains('жалоб') || q.contains('оспор')) {
-      return '[Факт из квитанции] Обнаружена подтвержденная переплата 245,18 ₽ по услуге ХВС.\n\n'
-          '[Аналитическая гипотеза] В приложении уже сформирован официальный текст досудебной претензии в ООО «УК Комфорт». '
-          'Перейдите на экран «Претензия», скопируйте текст или скачайте PDF для отправки в УК или через ГИС ЖКХ.';
-    }
-    return '[Факт из квитанции] Квитанция проанализирована детерминированным ядром UtilityLens.\n\n'
-        '[Аналитическая гипотеза] На основании ст. 157 ЖК РФ и ПП РФ № 354 размер платы должен рассчитываться '
-        'строго по показаниям приборов учета. При неправомерных начислениях потребитель имеет право требовать '
-        'перерасчета и штрафа 50% от суммы переплаты (ч. 6 ст. 157 ЖК РФ).';
-  }
-
-  /// Данные реальной квитанции из Владивостока (ул. Амурская, д. 7) с коэффициентом 3.0
-  ComparisonReport _buildVladivostokRealCase({String? comparisonId}) {
-    return ComparisonReport(
-      comparisonId: comparisonId ?? "cmp-vladivostok-amurskaya-coeff3",
-      summary: const SummaryReport(
-        prevPeriod: "2026-08",
-        currPeriod: "2026-09",
-        prevTotal: 750.94,
-        currTotal: 1437.50,
-        deltaAbs: 686.56,
-        deltaPct: 91.43,
-        qrVerified: true,
-        statusLevel: "red",
-      ),
-      factorBreakdown: const FactorBreakdown(
-        tariffEffectRub: 0.0,
-        volumeEffectRub: 0.0,
-        recalculationEffectRub: 686.56,
-        newServicesEffectRub: 0.0,
-      ),
-      anomalies: const [
-        AnomalyItem(
-          code: "APPLYING_COEFF_3_0",
-          severity: "red",
-          serviceCategory: "cold_water",
-          title: "Применен 3-кратный штрафной коэффициент на ХВС",
-          impactRub: 686.56,
-          hint: "КГУП «Приморский водоканал» начислил ХВС с коэффициентом 3.0 (1 029.84 ₽ вместо 343.28 ₽). Требуется досудебная претензия по ст. 157 ЖК РФ.",
-        ),
-      ],
-      items: const [
-        ServiceItem(
-          category: "cold_water",
-          displayName: "Холодное водоснабжение (ХВС)",
-          unit: "м3",
-          prevVolume: 7.324,
-          currVolume: 7.324,
-          prevTariff: 46.87,
-          currTariff: 46.87,
-          prevTotal: 343.28,
-          currTotal: 1029.84,
-          deltaAbs: 686.56,
-          deltaPct: 200.0,
-          tariffDeltaRub: 0.0,
-          volumeDeltaRub: 0.0,
-          coeffSurchargeRub: 686.56,
-          status: "red",
-          plainExplanation: "Норматив 7.324 м³ при тарифе 46.87 ₽/м³ умножен на повышающий коэффициент 3.0. Переплата: 686.56 ₽.",
-        ),
-        ServiceItem(
-          category: "drainage",
-          displayName: "Водоотведение (ХВС + ГВС)",
-          unit: "м3",
-          prevVolume: 11.400,
-          currVolume: 11.400,
-          prevTariff: 35.76,
-          currTariff: 35.76,
-          prevTotal: 407.66,
-          currTotal: 407.66,
-          deltaAbs: 0.0,
-          deltaPct: 0.0,
-          tariffDeltaRub: 0.0,
-          volumeDeltaRub: 0.0,
-          coeffSurchargeRub: 0.0,
-          status: "green",
-          plainExplanation: "Объем 11.4 м³ рассчитан строго по нормативу без повышающих коэффициентов.",
-        ),
-      ],
-    );
-  }
-
-  ComparisonReport _buildMockReport(String caseId) {
-    return const ComparisonReport(
-      comparisonId: "cmp-mock-coeff15",
-      summary: SummaryReport(
-        prevPeriod: "2026-10",
-        currPeriod: "2026-11",
-        prevTotal: 5420.0,
-        currTotal: 6890.5,
-        deltaAbs: 1470.5,
-        deltaPct: 27.13,
-        qrVerified: true,
-        statusLevel: "red",
-      ),
-      factorBreakdown: FactorBreakdown(
-        tariffEffectRub: 144.8,
-        volumeEffectRub: 856.56,
-        recalculationEffectRub: 469.14,
-        newServicesEffectRub: 0.0,
-      ),
-      anomalies: [
-        AnomalyItem(
-          code: "APPLYING_COEFF_1_5",
-          severity: "red",
-          serviceCategory: "cold_water",
-          title: "Применен повышающий коэффициент 1.5",
-          impactRub: 245.18,
-          hint: "Истек срок поверки счетчика ХВС",
-        ),
-      ],
-      items: [
-        ServiceItem(
-          category: "cold_water",
-          displayName: "Холодное водоснабжение (ХВС)",
-          unit: "м3",
-          prevVolume: 6.0,
-          currVolume: 8.2,
-          prevTariff: 54.0,
-          currTariff: 59.8,
-          prevTotal: 324.0,
-          currTotal: 735.54,
-          deltaAbs: 411.54,
-          deltaPct: 127.02,
-          tariffDeltaRub: 34.8,
-          volumeDeltaRub: 131.56,
-          coeffSurchargeRub: 245.18,
-          status: "red",
-          plainExplanation: "Начислен коэффициент 1.5 за отсутствие поверки счетчика.",
-        ),
-      ],
-    );
   }
 }
