@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../core/permission_service.dart';
 import '../core/theme.dart';
 import '../widgets/receipt_upload_bottom_sheet.dart';
+import 'receipt_viewer_screen.dart';
 import 'scanner_screen.dart';
 
 class OnboardingScreen extends StatelessWidget {
@@ -86,22 +88,35 @@ class OnboardingScreen extends StatelessWidget {
                     MaterialPageRoute(builder: (_) => const ScannerScreen()),
                   );
                 },
-                icon: const Icon(Icons.photo_camera_rounded, size: 20),
-                label: const Text('Сканировать квитанцию'),
+                icon: const Icon(Icons.camera_alt_rounded, size: 20),
+                label: const Text('Сфотографировать квитанцию'),
               ),
               const SizedBox(height: 12),
 
               OutlinedButton.icon(
-                onPressed: () {
-                  ReceiptUploadBottomSheet.show(context);
+                onPressed: () async {
+                  final picked = await PermissionService.pickReceiptFromGallery(context);
+                  if (picked != null && context.mounted) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ReceiptViewerScreen(
+                          filePath: picked.path,
+                          title: 'Квитанция из галереи',
+                          provider: 'Квитанция ЖКХ (из галереи)',
+                          address: 'г. Владивосток',
+                        ),
+                      ),
+                    );
+                  }
                 },
                 style: OutlinedButton.styleFrom(
                   backgroundColor: AppColors.darkSurface.withValues(alpha: 0.6),
                   foregroundColor: Colors.white,
                   side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
                 ),
-                icon: const Icon(Icons.upload_file_rounded, size: 20),
-                label: const Text('Загрузить фото / PDF'),
+                icon: const Icon(Icons.photo_library_rounded, size: 20),
+                label: const Text('Загрузить фото из галереи'),
               ),
               const SizedBox(height: 16),
 

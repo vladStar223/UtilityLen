@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:image_picker/image_picker.dart';
 import '../bloc/audit/audit_bloc.dart';
 import '../bloc/audit/audit_event.dart';
+import '../core/permission_service.dart';
 import '../core/theme.dart';
 import '../widgets/receipt_upload_bottom_sheet.dart';
 import 'main_scaffold.dart';
 import 'receipt_viewer_screen.dart';
 
+/// Экран фотосъемки и сканирования квитанции ЖКХ (без QR-кодов, прямой захват документа)
 class ScannerScreen extends StatefulWidget {
   const ScannerScreen({super.key});
 
@@ -18,16 +19,15 @@ class ScannerScreen extends StatefulWidget {
 class _ScannerScreenState extends State<ScannerScreen>
     with SingleTickerProviderStateMixin {
   bool _torchOn = false;
-  bool _isScanning = false;
+  bool _isProcessing = false;
   late AnimationController _animController;
-  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
+      duration: const Duration(milliseconds: 2200),
     )..repeat(reverse: true);
   }
 
@@ -38,67 +38,48 @@ class _ScannerScreenState extends State<ScannerScreen>
   }
 
   Future<void> _pickFromGallery() async {
-    try {
-      final picked = await _picker.pickImage(source: ImageSource.gallery);
-      if (picked != null && mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ReceiptViewerScreen(
-              filePath: picked.path,
-              title: 'Квитанция из галереи',
-              provider: 'Квитанция ЖКХ (из галереи)',
-              address: 'г. Владивосток',
-            ),
+    final picked = await PermissionService.pickReceiptFromGallery(context);
+    if (picked != null && mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ReceiptViewerScreen(
+            filePath: picked.path,
+            title: 'Квитанция из галереи',
+            provider: 'Квитанция ЖКХ (из галереи)',
+            address: 'г. Владивосток',
           ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка доступа к галерее: $e')),
-        );
-      }
+        ),
+      );
     }
   }
 
   Future<void> _takePhoto() async {
-    try {
-      final picked = await _picker.pickImage(source: ImageSource.camera);
-      if (picked != null && mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ReceiptViewerScreen(
-              filePath: picked.path,
-              title: 'Снимок с камеры',
-              provider: 'Квитанция ЖКХ',
-              address: 'г. Владивосток',
-            ),
+    final picked = await PermissionService.takeReceiptPhoto(context);
+    if (picked != null && mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ReceiptViewerScreen(
+            filePath: picked.path,
+            title: 'Снимок с камеры',
+            provider: 'Сфотографированная квитанция',
+            address: 'г. Владивосток',
           ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка камеры: $e')),
-        );
-      }
+        ),
+      );
     }
   }
 
-  Future<void> _simulateLiveScan() async {
-    if (_isScanning) return;
+  Future<void> _simulateFastCapture() async {
+    if (_isProcessing) return;
     setState(() {
-      _isScanning = true;
+      _isProcessing = true;
     });
 
-    // Realistic scanning delay
-    await Future.delayed(const Duration(milliseconds: 900));
-
+    await Future.delayed(const Duration(milliseconds: 700));
     if (!mounted) return;
 
-    // Show recognition sheet
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -123,7 +104,7 @@ class _ScannerScreenState extends State<ScannerScreen>
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
-                    Icons.qr_code_scanner_rounded,
+                    Icons.check_circle_rounded,
                     color: AppColors.success,
                     size: 26,
                   ),
@@ -134,7 +115,7 @@ class _ScannerScreenState extends State<ScannerScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'QR-код успешно распознан!',
+                        'Квитанция успешно захвачена!',
                         style: TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 16,
@@ -142,7 +123,7 @@ class _ScannerScreenState extends State<ScannerScreen>
                         ),
                       ),
                       Text(
-                        'ГОСТ Р 56042-2014 · Приморский водоканал',
+                        'Данные распознаны · Приморский водоканал',
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 12,
@@ -207,7 +188,7 @@ class _ScannerScreenState extends State<ScannerScreen>
     );
 
     setState(() {
-      _isScanning = false;
+      _isProcessing = false;
     });
   }
 
@@ -217,7 +198,7 @@ class _ScannerScreenState extends State<ScannerScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Simulated live viewfinder background
+          // Viewfinder background with document guide
           Positioned.fill(
             child: Container(
               color: const Color(0xFF13121A),
@@ -228,7 +209,7 @@ class _ScannerScreenState extends State<ScannerScreen>
                     'assets/receipts/receipt_vladivostok_1.webp',
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => const Icon(
-                      Icons.document_scanner_rounded,
+                      Icons.description_rounded,
                       size: 160,
                       color: Colors.white24,
                     ),
@@ -238,7 +219,7 @@ class _ScannerScreenState extends State<ScannerScreen>
             ),
           ),
 
-          // Main scanner overlay
+          // Main capture overlay
           SafeArea(
             child: Column(
               children: [
@@ -260,7 +241,7 @@ class _ScannerScreenState extends State<ScannerScreen>
                           border: Border.all(color: Colors.white12),
                         ),
                         child: const Text(
-                          'Наведите камеру\nна QR-код квитанции',
+                          'Поместите квитанцию\nв рамку для съемки',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.white,
@@ -286,18 +267,18 @@ class _ScannerScreenState extends State<ScannerScreen>
 
                 const Spacer(),
 
-                // Center viewfinder with animated laser line
+                // Document-shaped Viewfinder (A4 / Bill aspect ratio)
                 GestureDetector(
-                  onTap: _simulateLiveScan,
+                  onTap: _takePhoto,
                   child: Container(
-                    width: 260,
-                    height: 260,
+                    width: 270,
+                    height: 360,
                     decoration: BoxDecoration(
                       color: Colors.transparent,
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(
-                        color: AppColors.primaryLight.withValues(alpha: 0.6),
-                        width: 2.5,
+                        color: AppColors.primaryLight.withValues(alpha: 0.7),
+                        width: 2.0,
                       ),
                       boxShadow: [
                         BoxShadow(
@@ -315,12 +296,12 @@ class _ScannerScreenState extends State<ScannerScreen>
                         _buildCorner(Alignment.bottomLeft, bottom: true, left: true),
                         _buildCorner(Alignment.bottomRight, bottom: true, right: true),
 
-                        // Animated laser scanning line
+                        // Animated scanning frame highlight
                         AnimatedBuilder(
                           animation: _animController,
                           builder: (context, _) {
                             return Positioned(
-                              top: 20 + _animController.value * 210,
+                              top: 20 + _animController.value * 310,
                               left: 12,
                               right: 12,
                               child: Container(
@@ -340,16 +321,16 @@ class _ScannerScreenState extends State<ScannerScreen>
                           },
                         ),
 
-                        // Center scan hint
+                        // Center tap hint
                         Center(
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             decoration: BoxDecoration(
-                              color: Colors.black45,
+                              color: Colors.black54,
                               borderRadius: BorderRadius.circular(16),
                             ),
                             child: Text(
-                              _isScanning ? 'Распознавание...' : 'Нажмите для\nсканирования',
+                              _isProcessing ? 'Обработка...' : 'Нажмите для\nфотосъемки',
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 color: Colors.white,
@@ -366,87 +347,100 @@ class _ScannerScreenState extends State<ScannerScreen>
 
                 const Spacer(),
 
-                // Bottom actions row: Camera / Gallery / Samples
+                // Bottom actions row: Gallery, Big Shutter, Samples
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                   child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      // Camera button
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _takePhoto,
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: const Color(0xFF232033),
-                            foregroundColor: Colors.white,
-                            side: const BorderSide(color: Colors.white24),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
+                      // Gallery button
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            onPressed: _pickFromGallery,
+                            iconSize: 28,
+                            style: IconButton.styleFrom(
+                              backgroundColor: const Color(0xFF232033),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.all(12),
+                            ),
+                            icon: const Icon(Icons.photo_library_rounded),
                           ),
-                          icon: const Icon(Icons.camera_alt_rounded, size: 20),
-                          label: const Text('Камера'),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Галерея',
+                            style: TextStyle(color: Colors.white70, fontSize: 12),
+                          ),
+                        ],
+                      ),
+
+                      // Large Shutter Button (Сделать снимок)
+                      GestureDetector(
+                        onTap: _takePhoto,
+                        child: Container(
+                          width: 76,
+                          height: 76,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: const LinearGradient(
+                              colors: [AppColors.primary, AppColors.primaryGradientEnd],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            border: Border.all(color: Colors.white, width: 4),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withValues(alpha: 0.5),
+                                blurRadius: 18,
+                                spreadRadius: 3,
+                              ),
+                            ],
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.camera_alt_rounded,
+                              color: Colors.white,
+                              size: 34,
+                            ),
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      // Gallery button
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _pickFromGallery,
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: const Color(0xFF232033),
-                            foregroundColor: Colors.white,
-                            side: const BorderSide(color: Colors.white24),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
+
+                      // Samples button
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            onPressed: () => ReceiptUploadBottomSheet.show(context),
+                            iconSize: 28,
+                            style: IconButton.styleFrom(
+                              backgroundColor: const Color(0xFF232033),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.all(12),
+                            ),
+                            icon: const Icon(Icons.folder_special_rounded),
                           ),
-                          icon: const Icon(Icons.photo_library_rounded, size: 20),
-                          label: const Text('Галерея'),
-                        ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Образцы',
+                            style: TextStyle(color: Colors.white70, fontSize: 12),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
 
-                // Upload photo / samples bottom card
+                // Fast test hint button
                 Padding(
-                  padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF232033),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white12),
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () => ReceiptUploadBottomSheet.show(context),
-                        borderRadius: BorderRadius.circular(20),
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.folder_special_rounded,
-                                color: AppColors.primaryLight,
-                                size: 24,
-                              ),
-                              SizedBox(width: 14),
-                              Expanded(
-                                child: Text(
-                                  'Образцы квитанций Владивостока',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              Icon(
-                                Icons.chevron_right_rounded,
-                                color: Colors.white54,
-                                size: 22,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: TextButton.icon(
+                    onPressed: _simulateFastCapture,
+                    icon: const Icon(Icons.flash_auto_rounded, size: 16, color: Colors.white60),
+                    label: const Text(
+                      'Демо-захват квитанции Владивостока',
+                      style: TextStyle(color: Colors.white60, fontSize: 12),
                     ),
                   ),
                 ),
@@ -468,8 +462,8 @@ class _ScannerScreenState extends State<ScannerScreen>
     return Align(
       alignment: alignment,
       child: Container(
-        width: 24,
-        height: 24,
+        width: 26,
+        height: 26,
         decoration: BoxDecoration(
           border: Border(
             top: top ? const BorderSide(color: Colors.white, width: 4) : BorderSide.none,

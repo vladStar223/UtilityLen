@@ -118,10 +118,10 @@ class ClaimScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: Column(
+                    child: const Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Center(
+                        Center(
                           child: Text(
                             'ПРЕТЕНЗИЯ',
                             style: TextStyle(
@@ -132,8 +132,8 @@ class ClaimScreen extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 14),
-                        const Text(
+                        SizedBox(height: 14),
+                        Text(
                           'В управляющую компанию\nООО «УК Комфорт»',
                           style: TextStyle(
                             color: AppColors.textSecondary,
@@ -142,8 +142,8 @@ class ClaimScreen extends StatelessWidget {
                             height: 1.3,
                           ),
                         ),
-                        const Divider(height: 24, color: AppColors.border),
-                        const Text(
+                        Divider(height: 24, color: AppColors.border),
+                        Text(
                           'На основании ст. 157 ЖК РФ и ПП РФ № 354 прошу произвести перерасчёт начислений за ХВС в сумме 245,18 ₽.',
                           style: TextStyle(
                             color: AppColors.textPrimary,
@@ -152,8 +152,8 @@ class ClaimScreen extends StatelessWidget {
                             height: 1.4,
                           ),
                         ),
-                        const SizedBox(height: 14),
-                        const Text(
+                        SizedBox(height: 14),
+                        Text(
                           'Приложение: копия квитанции за Ноябрь 2026 г.',
                           style: TextStyle(
                             color: AppColors.textSecondary,

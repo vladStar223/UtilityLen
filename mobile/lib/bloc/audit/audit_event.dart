@@ -31,6 +31,15 @@ class FilterCategoryEvent extends AuditEvent {
   List<Object?> get props => [category];
 }
 
+class CaptureReceiptPhotoEvent extends AuditEvent {
+  final String? filePath;
+  final String caseId;
+  const CaptureReceiptPhotoEvent({this.filePath, this.caseId = 'case_04_vladivostok_coeff3'});
+
+  @override
+  List<Object?> get props => [filePath, caseId];
+}
+
 class ScanQrEvent extends AuditEvent {
   final String qrPayload;
   const ScanQrEvent(this.qrPayload);

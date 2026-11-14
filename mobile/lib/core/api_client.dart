@@ -27,7 +27,7 @@ class ApiClient {
       // Fallback на локальный список, если сервер временно недоступен
     }
 
-    return [
+    return const [
       CaseItem(
         caseId: "case_04_vladivostok_coeff3",
         title: "Владивосток: Коэффициент 3.0 (ул. Амурская)",
@@ -195,7 +195,7 @@ class ApiClient {
   ComparisonReport _buildVladivostokRealCase({String? comparisonId}) {
     return ComparisonReport(
       comparisonId: comparisonId ?? "cmp-vladivostok-amurskaya-coeff3",
-      summary: SummaryReport(
+      summary: const SummaryReport(
         prevPeriod: "2026-08",
         currPeriod: "2026-09",
         prevTotal: 750.94,
@@ -205,13 +205,13 @@ class ApiClient {
         qrVerified: true,
         statusLevel: "red",
       ),
-      factorBreakdown: FactorBreakdown(
+      factorBreakdown: const FactorBreakdown(
         tariffEffectRub: 0.0,
         volumeEffectRub: 0.0,
         recalculationEffectRub: 686.56,
         newServicesEffectRub: 0.0,
       ),
-      anomalies: [
+      anomalies: const [
         AnomalyItem(
           code: "APPLYING_COEFF_3_0",
           severity: "red",
@@ -221,7 +221,7 @@ class ApiClient {
           hint: "КГУП «Приморский водоканал» начислил ХВС с коэффициентом 3.0 (1 029.84 ₽ вместо 343.28 ₽). Требуется досудебная претензия по ст. 157 ЖК РФ.",
         ),
       ],
-      items: [
+      items: const [
         ServiceItem(
           category: "cold_water",
           displayName: "Холодное водоснабжение (ХВС)",
@@ -263,7 +263,7 @@ class ApiClient {
   }
 
   ComparisonReport _buildMockReport(String caseId) {
-    return ComparisonReport(
+    return const ComparisonReport(
       comparisonId: "cmp-mock-coeff15",
       summary: SummaryReport(
         prevPeriod: "2026-10",

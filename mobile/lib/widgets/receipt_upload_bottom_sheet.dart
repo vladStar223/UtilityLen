@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import '../core/permission_service.dart';
 import '../core/theme.dart';
 import '../screens/receipt_viewer_screen.dart';
 
@@ -18,8 +18,6 @@ class ReceiptUploadBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final picker = ImagePicker();
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       decoration: const BoxDecoration(
@@ -55,7 +53,7 @@ class ReceiptUploadBottomSheet extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Выберите способ добавления документа для аудита и распознавания ГОСТ QR',
+              'Выберите способ добавления документа для факторного аудита начислений',
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 13,
@@ -72,27 +70,19 @@ class ReceiptUploadBottomSheet extends StatelessWidget {
               subtitle: 'Фотографии, скриншоты или сканы квитанций',
               onTap: () async {
                 Navigator.pop(context);
-                try {
-                  final picked = await picker.pickImage(source: ImageSource.gallery);
-                  if (picked != null && context.mounted) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ReceiptViewerScreen(
-                          filePath: picked.path,
-                          title: 'Квитанция из галереи',
-                          provider: 'Квитанция ЖКХ (из галереи)',
-                          address: 'г. Владивосток',
-                        ),
+                final picked = await PermissionService.pickReceiptFromGallery(context);
+                if (picked != null && context.mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ReceiptViewerScreen(
+                        filePath: picked.path,
+                        title: 'Квитанция из галереи',
+                        provider: 'Квитанция ЖКХ (из галереи)',
+                        address: 'г. Владивосток',
                       ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Ошибка выбора из галереи: $e')),
-                    );
-                  }
+                    ),
+                  );
                 }
               },
             ),
@@ -102,31 +92,23 @@ class ReceiptUploadBottomSheet extends StatelessWidget {
             _buildOptionTile(
               icon: Icons.photo_camera_rounded,
               iconColor: AppColors.warning,
-              title: 'Сделать фото камерой',
-              subtitle: 'Быстрый снимок квитанции или QR-кода',
+              title: 'Сфотографировать квитанцию',
+              subtitle: 'Быстрый снимок бумажной квитанции камерой',
               onTap: () async {
                 Navigator.pop(context);
-                try {
-                  final picked = await picker.pickImage(source: ImageSource.camera);
-                  if (picked != null && context.mounted) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ReceiptViewerScreen(
-                          filePath: picked.path,
-                          title: 'Снимок с камеры',
-                          provider: 'Сфотографированная квитанция',
-                          address: 'г. Владивосток',
-                        ),
+                final picked = await PermissionService.takeReceiptPhoto(context);
+                if (picked != null && context.mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ReceiptViewerScreen(
+                        filePath: picked.path,
+                        title: 'Снимок с камеры',
+                        provider: 'Сфотографированная квитанция',
+                        address: 'г. Владивосток',
                       ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Ошибка камеры: $e')),
-                    );
-                  }
+                    ),
+                  );
                 }
               },
             ),

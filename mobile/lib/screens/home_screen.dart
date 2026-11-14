@@ -75,11 +75,11 @@ class HomeScreen extends StatelessWidget {
                         children: [
                           IconButton(
                             icon: const Icon(
-                              Icons.qr_code_scanner_rounded,
+                              Icons.camera_alt_rounded,
                               color: AppColors.primary,
                               size: 24,
                             ),
-                            tooltip: 'Сканировать квитанцию',
+                            tooltip: 'Сфотографировать квитанцию',
                             onPressed: () {
                               Navigator.push(
                                 context,

@@ -47,7 +47,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
             Container(
               width: 34,
               height: 34,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.primaryLight,
                 shape: BoxShape.circle,
               ),
@@ -173,9 +173,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
               // Input bar
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppColors.card,
-                  border: const Border(top: BorderSide(color: AppColors.border)),
+                  border: Border(top: BorderSide(color: AppColors.border)),
                 ),
                 child: SafeArea(
                   top: false,
@@ -251,7 +251,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
             Container(
               width: 32,
               height: 32,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.primaryLight,
                 shape: BoxShape.circle,
               ),

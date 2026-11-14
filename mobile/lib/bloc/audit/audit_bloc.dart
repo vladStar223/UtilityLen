@@ -11,6 +11,7 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
     on<LoadAuditDataEvent>(_onLoadAuditData);
     on<ChangePeriodEvent>(_onChangePeriod);
     on<FilterCategoryEvent>(_onFilterCategory);
+    on<CaptureReceiptPhotoEvent>(_onCaptureReceiptPhoto);
     on<ScanQrEvent>(_onScanQr);
   }
 
@@ -121,11 +122,19 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
     emit(state.copyWith(selectedCategory: event.category));
   }
 
+  Future<void> _onCaptureReceiptPhoto(
+    CaptureReceiptPhotoEvent event,
+    Emitter<AuditState> emit,
+  ) async {
+    // При фотосъемке квитанции запускаем факторный аудит
+    add(LoadAuditDataEvent(caseId: event.caseId));
+  }
+
   Future<void> _onScanQr(
     ScanQrEvent event,
     Emitter<AuditState> emit,
   ) async {
-    // При сканировании QR-кода загружаем кейс
+    // Совместимость: загружаем кейс
     add(const LoadAuditDataEvent(caseId: 'case_04_vladivostok_coeff3'));
   }
 }

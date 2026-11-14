@@ -112,7 +112,7 @@ class ReceiptViewerScreen extends StatelessWidget {
                             Icon(Icons.check_circle_rounded, color: AppColors.success, size: 14),
                             SizedBox(width: 5),
                             Text(
-                              'ГОСТ Р 56042-2014',
+                              'Документ распознан',
                               style: TextStyle(
                                 color: AppColors.success,
                                 fontSize: 11,
