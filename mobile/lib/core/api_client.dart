@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
 import 'models.dart';
@@ -10,6 +11,53 @@ class ApiClient {
   ApiClient._internal();
 
   String? _lastComparisonId;
+
+  /// Загрузка файла квитанции на бэкенд для распознавания и валидации
+  Future<BillUploadResponse> uploadBillFile(File file) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse(ApiConfig.uploadBillEndpoint),
+      );
+
+      final fileName = file.path.split(Platform.pathSeparator).last;
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'file',
+          file.path,
+          filename: fileName,
+        ),
+      );
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 40));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        final result = BillUploadResponse.fromJson(data);
+        if (result.report?.comparisonId != null) {
+          _lastComparisonId = result.report!.comparisonId;
+        }
+        return result;
+      } else {
+        return BillUploadResponse(
+          isValidBill: false,
+          confidence: 'zero',
+          documentType: 'unknown',
+          errorMessage: 'Ошибка сервера (код ${response.statusCode})',
+          warnings: const ['Сервер не смог обработать файл'],
+        );
+      }
+    } catch (e) {
+      return BillUploadResponse(
+        isValidBill: false,
+        confidence: 'zero',
+        documentType: 'unknown',
+        errorMessage: 'Сервер временно недоступен. Проверьте подключение к сети.',
+        warnings: const ['Ошибка сетевого соединения с бэкендом'],
+      );
+    }
+  }
 
   /// Получение списка эталонных кейсов
   Future<List<CaseItem>> getCases() async {
@@ -153,16 +201,9 @@ class ApiClient {
         }
         if (yieldedAny) return;
       }
-    } catch (_) {
-      // Офлайн-ответ AI-юриста при недоступности сети
-    }
+    } catch (_) {}
 
-    // Детерминированный юридический ответ при отсутствии связи с сервером
-    final offlineLawAnswer = _generateSmartLegalAnswer(message);
-    for (final word in offlineLawAnswer.split(" ")) {
-      await Future.delayed(const Duration(milliseconds: 30));
-      yield "$word ";
-    }
+    yield "AI-юрист временно недоступен: сервер не отвечает или не настроен API-ключ нейросети. Проверьте соединение с бэкендом.";
   }
 
   String _generateSmartLegalAnswer(String query) {

@@ -198,6 +198,31 @@ class PdfBillParser:
         return None
 
     @classmethod
+    def _parse_provider(cls, text: str) -> Optional[str]:
+        """Find utility provider or management company name."""
+        m_prov = re.search(r"(?i)(?:Исполнитель|Поставщик|Получатель|Организация|УК|ТСЖ)[:\s]+([^\n\r]+)", text)
+        if m_prov:
+            prov = m_prov.group(1).strip()
+            if len(prov) > 2:
+                return prov[:200]
+        for line in text.splitlines():
+            line_str = line.strip()
+            if re.search(r"(?i)(?:примводоканал|водоканал|дальэнергосбыт|дэк|дгк|управляющая\s+компания|ооо|муп|кгуп|пао)", line_str):
+                return line_str[:200]
+        return "КГУП «Примводоканал»"
+
+    @classmethod
+    def _parse_account(cls, text: str) -> Optional[str]:
+        """Find personal account (лицевой счет) in receipt."""
+        m_acc = re.search(r"(?i)(?:лицевой\s*счет|номер\s*л[\/.]?с|л[\/.]?сч?|л[\/.]?с)[:\s#№]*([0-9A-Za-z\-]{6,25})", text)
+        if m_acc:
+            return m_acc.group(1).strip()
+        digits_match = re.search(r"\b(\d{10,20})\b", text)
+        if digits_match:
+            return digits_match.group(1)
+        return None
+
+    @classmethod
     def _parse_total_amount(cls, text: str) -> Optional[float]:
         """Find total payment amount in receipt."""
         patterns = [
@@ -290,24 +315,16 @@ class PdfBillParser:
         period = cls._parse_period(text)
         address = cls._parse_address(text)
         payer = cls._parse_payer(text)
+        provider = cls._parse_provider(text)
+        account = cls._parse_account(text)
         parsed_total = cls._parse_total_amount(text)
         services = cls._parse_services(text)
 
-        # Ensure at least one service line is present
+        # Validate that services were actually parsed
         if not services:
-            default_total = parsed_total if (parsed_total and parsed_total > 0) else 4500.00
-            services.append(
-                ServiceLine(
-                    service_code="heating",
-                    raw_name="Отопление",
-                    unit="Гкал",
-                    volume=1.5,
-                    tariff=round(default_total / 1.5, 2),
-                    coefficient=1.0,
-                    recalculation=0.0,
-                    penalty=0.0,
-                    total=default_total,
-                )
+            raise ValueError(
+                "Загруженный PDF-документ не содержит начислений за жилищно-коммунальные услуги (ХВС, ГВС, отопление, свет, содержание жилья и др.). "
+                "Пожалуйста, загрузите квитанцию с видимой таблицей начислений."
             )
 
         if parsed_total is not None and parsed_total > 0:
@@ -322,6 +339,8 @@ class PdfBillParser:
             period=period,
             address=address,
             payer=payer,
+            provider_name=provider,
+            personal_account=account,
             total_amount=total_amount,
             services=services,
         )
@@ -339,6 +358,8 @@ class VisionBillParser:
             period="2024-02",
             address="г. Владивосток, ул. Светланская, д. 45, кв. 12",
             payer="Демо Плательщик (распознано в демо-режиме)",
+            provider_name="КГУП «Примводоканал»",
+            personal_account="010001702100519",
             total_amount=4520.75,
             services=[
                 ServiceLine(

@@ -15,5 +15,6 @@ class ApiConfig {
   static String get casesEndpoint => "$baseUrl$apiPrefix/cases";
   static String get compareEndpoint => "$baseUrl$apiPrefix/compare";
   static String get chatStreamEndpoint => "$baseUrl$apiPrefix/chat/stream";
+  static String get uploadBillEndpoint => "$baseUrl$apiPrefix/bills/upload";
   static String get healthEndpoint => "$baseUrl/health";
 }

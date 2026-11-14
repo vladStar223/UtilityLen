@@ -57,10 +57,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
       emit(state.copyWith(isStreaming: false));
     } catch (e) {
-      // Локальный юридический fallback при отсутствии связи
-      final fallbackReply = _generateFallbackLegalAnswer(userText);
       final currentList = List<ChatMessage>.from(updatedMessages)
-        ..add(ChatMessage(text: fallbackReply, isUser: false));
+        ..add(ChatMessage(
+          text: 'AI-юрист временно недоступен: ошибка подключения к серверу или не задан API-ключ. Проверьте соединение с бэкендом.',
+          isUser: false,
+        ));
 
       emit(state.copyWith(
         messages: currentList,

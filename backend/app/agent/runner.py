@@ -327,10 +327,18 @@ async def generate_stream(
     )
 
     api_key, url, _, _ = _get_llm_credentials()
+    if not api_key:
+        yield sse_event({
+            "type": "token",
+            "content": "AI-юрист временно недоступен: на сервере не настроен API-ключ нейросети (GPTUNNEL_API_KEY). Укажите действующий ключ в файле .env для подключения языковой модели.",
+        })
+        yield sse_event({"type": "done"})
+        return
+
     stream_successful = False
 
     # 1. Try real SSE streaming from LLM if configured
-    if api_key and url:
+    if url:
         try:
             async for token in _stream_llm(SYSTEM_PROMPT, data_context, message, history):
                 stream_successful = True
@@ -338,11 +346,16 @@ async def generate_stream(
         except Exception as exc:
             logger.warning("Stream attempt exception: %s", exc)
 
-    # 2. If stream yielded no tokens, fall back to _call_llm or smart fallback
+    # 2. If stream yielded no tokens, fall back to _call_llm
     if not stream_successful:
         llm_answer = await _call_llm(SYSTEM_PROMPT, data_context, message, history)
-        answer = llm_answer if llm_answer else build_fallback_answer(report, message)
-        for chunk in _chunks(answer):
-            yield sse_event({"type": "token", "content": chunk})
+        if llm_answer:
+            for chunk in _chunks(llm_answer):
+                yield sse_event({"type": "token", "content": chunk})
+        else:
+            yield sse_event({
+                "type": "token",
+                "content": "AI-юрист временно недоступен: шлюз языковой модели (GPTunnel) не ответил на запрос. Пожалуйста, проверьте баланс или статус провайдера.",
+            })
 
     yield sse_event({"type": "done"})

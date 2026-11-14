@@ -45,6 +45,8 @@ class BillDocument(BaseModel):
     period: str = Field(description="Расчётный период (YYYY-MM)", examples=["2024-01", "2024-02"])
     address: str = Field(description="Адрес объекта", examples=["г. Владивосток, ул. Ленина, д. 10, кв. 25"], max_length=500)
     payer: Optional[str] = Field(default=None, description="ФИО плательщика", examples=["Иванов Иван Иванович"])
+    provider_name: Optional[str] = Field(default=None, description="Поставщик коммунальных услуг / УК", examples=["КГУП «Примводоканал»"])
+    personal_account: Optional[str] = Field(default=None, description="Лицевой счет", examples=["010001702100519"])
     total_amount: Money = Field(description="Общая сумма к оплате, руб.", examples=[4520.75, 6800.00])
     qr_data: Optional[str] = Field(default=None, description="Данные QR-кода квитанции", examples=["01;1234567890;..."])
     qr_sum_rub: Optional[Money] = Field(default=None, description="Сумма из QR-кода, руб.", examples=[4520.75])
@@ -104,3 +106,36 @@ class ComparisonReport(BaseModel):
     factor_breakdown: FactorBreakdown = Field(description="Факторный разбор изменений")
     anomalies: List[AnomalyItem] = Field(description="Список обнаруженных аномалий")
     items: List[ServiceItem] = Field(description="Детализация по каждой услуге")
+
+
+class ExtractedServiceItem(BaseModel):
+    service_code: str = Field(description="Код услуги", examples=["cold_water", "heating"])
+    raw_name: str = Field(description="Исходное наименование услуги", examples=["Холодное водоснабжение"])
+    unit: str = Field(description="Единица измерения", examples=["м3", "Гкал"])
+    volume: float = Field(default=0.0, description="Объем")
+    tariff: Money = Field(default=0.0, description="Тариф")
+    total: Money = Field(default=0.0, description="Сумма начисления")
+
+
+class ExtractedBillData(BaseModel):
+    bill_id: str = Field(description="ID квитанции", examples=["bill-2026-09-01"])
+    period: str = Field(description="Период начисления", examples=["2026-09"])
+    address: str = Field(description="Адрес жилого помещения", examples=["г. Владивосток, ул. Амурская, д. 7"])
+    payer: Optional[str] = Field(default=None, description="Плательщик / абонент")
+    provider_name: Optional[str] = Field(default=None, description="Поставщик услуг / УК")
+    personal_account: Optional[str] = Field(default=None, description="Лицевой счет")
+    total_amount: Money = Field(description="Итоговая сумма квитанции")
+    services: List[ExtractedServiceItem] = Field(default_factory=list, description="Распознанные услуги")
+    has_qr: bool = Field(default=False, description="Присутствует ли QR-код")
+    qr_sum_rub: Optional[Money] = Field(default=None, description="Сумма из QR-кода")
+
+
+class BillUploadResponse(BaseModel):
+    is_valid_bill: bool = Field(description="Является ли загруженный документ квитанцией ЖКХ")
+    confidence: str = Field(default="high", description="Уровень уверенности: high, medium, low, zero")
+    document_type: str = Field(default="utility_bill", description="utility_bill, non_utility_document, unknown")
+    error_message: Optional[str] = Field(default=None, description="Пояснение при невозможности распознать квитанцию")
+    warnings: List[str] = Field(default_factory=list, description="Предупреждения при распознавании")
+    extracted_data: Optional[ExtractedBillData] = Field(default=None, description="Извлеченные реквизиты квитанции")
+    report: Optional[ComparisonReport] = Field(default=None, description="Отчет факторного анализа")
+

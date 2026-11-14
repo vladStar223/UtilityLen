@@ -60,8 +60,12 @@ from app.core.auth import get_current_user_optional
 from app.core.logging import logger
 from app.core.models import (
     AnomalyItem,
+    BillUploadResponse,
     ComparisonReport,
+    ExtractedBillData,
+    ExtractedServiceItem,
     FactorBreakdown,
+    ServiceItem,
     SummaryReport,
 )
 from app.db import crud
@@ -165,27 +169,38 @@ def _get_comparison_report(db: Session, comparison_id: str) -> Optional[Comparis
 
 @bills_router.post(
     "/upload",
-    response_model=ComparisonReport,
-    summary="Загрузка квитанции ЖКХ",
-    description="Принимает файл квитанции (PDF, PNG, JPG, JSON), производит распознавание и факторный анализ.",
+    response_model=BillUploadResponse,
+    summary="Загрузка и валидация квитанции ЖКХ",
+    description="Принимает файл квитанции (PDF, PNG, JPG, JSON), производит распознавание, валидацию и факторный анализ.",
 )
 async def upload_bill(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     user: Optional[User] = Depends(get_current_user_optional),
-) -> ComparisonReport:
+) -> BillUploadResponse:
     active_user = _resolve_user(db, user)
 
     content = await file.read()
     if not content:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Загруженный файл пуст.",
+        return BillUploadResponse(
+            is_valid_bill=False,
+            confidence="zero",
+            document_type="unknown",
+            error_message="Загруженный файл пуст.",
+            warnings=["Файл нулевого размера"],
+            extracted_data=None,
+            report=None,
         )
+
     if len(content) > MAX_FILE_SIZE_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Размер файла превышает лимит {MAX_FILE_SIZE_BYTES // (1024 * 1024)} МБ.",
+        return BillUploadResponse(
+            is_valid_bill=False,
+            confidence="zero",
+            document_type="unknown",
+            error_message=f"Размер файла превышает лимит {MAX_FILE_SIZE_BYTES // (1024 * 1024)} МБ.",
+            warnings=["Превышен максимальный допустимый размер файла"],
+            extracted_data=None,
+            report=None,
         )
 
     try:
@@ -197,17 +212,80 @@ async def upload_bill(
     except ValueError as exc:
         logger.warning("Invalid bill document '%s': %s", file.filename, exc)
         err_msg = str(exc)
-        detail_msg = err_msg if "не удалось" in err_msg.lower() else f"Не удалось обработать квитанцию: {err_msg}"
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=detail_msg,
+        detail_msg = err_msg if "не удалось" in err_msg.lower() or "не является" in err_msg.lower() else f"Не удалось обработать квитанцию: {err_msg}"
+        return BillUploadResponse(
+            is_valid_bill=False,
+            confidence="zero",
+            document_type="non_utility_document",
+            error_message=detail_msg,
+            warnings=["В файле не обнаружены обязательные реквизиты квитанции ЖКХ (услуги, объемы, тарифы)"],
+            extracted_data=None,
+            report=None,
         )
     except Exception as exc:
         logger.warning("Failed to parse bill file '%s': %s", file.filename, exc)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Не удалось обработать квитанцию: {exc}",
+        return BillUploadResponse(
+            is_valid_bill=False,
+            confidence="zero",
+            document_type="non_utility_document",
+            error_message=f"Ошибка распознавания документа: {exc}",
+            warnings=["Не удалось прочитать структуру файла"],
+            extracted_data=None,
+            report=None,
         )
+
+    # Perform quality checks on parsed bill
+    warnings: List[str] = []
+    if not bill_doc.services:
+        return BillUploadResponse(
+            is_valid_bill=False,
+            confidence="zero",
+            document_type="non_utility_document",
+            error_message="В документе не найдены начисления за жилищно-коммунальные услуги.",
+            warnings=["Таблица начислений пуста или не распознана"],
+            extracted_data=None,
+            report=None,
+        )
+
+    if float(bill_doc.total_amount) <= 0:
+        warnings.append("Итоговая сумма к оплате равна нулю или не определена")
+
+    account = getattr(bill_doc, "personal_account", None)
+    if not account:
+        warnings.append("Лицевой счет абонента не распознан")
+
+    provider = getattr(bill_doc, "provider_name", None) or "КГУП «Примводоканал»"
+
+    services_sum = sum(float(s.total) for s in bill_doc.services)
+    if abs(services_sum - float(bill_doc.total_amount)) > 2.0:
+        warnings.append(
+            f"Сумма строк услуг ({services_sum:.2f} ₽) отличается от общей суммы ({float(bill_doc.total_amount):.2f} ₽)"
+        )
+
+    extracted_services = [
+        ExtractedServiceItem(
+            service_code=s.service_code,
+            raw_name=s.raw_name,
+            unit=s.unit,
+            volume=float(s.volume),
+            tariff=float(s.tariff),
+            total=float(s.total),
+        )
+        for s in bill_doc.services
+    ]
+
+    extracted_data = ExtractedBillData(
+        bill_id=bill_doc.bill_id,
+        period=bill_doc.period,
+        address=bill_doc.address,
+        payer=bill_doc.payer,
+        provider_name=provider,
+        personal_account=account,
+        total_amount=float(bill_doc.total_amount),
+        services=extracted_services,
+        has_qr=bool(bill_doc.qr_data),
+        qr_sum_rub=float(bill_doc.qr_sum_rub) if bill_doc.qr_sum_rub is not None else None,
+    )
 
     try:
         report = ComparisonService.process_uploaded_bill(
@@ -215,12 +293,26 @@ async def upload_bill(
             curr_bill=bill_doc,
             user_id=active_user.user_id,
         )
-        return report
+        return BillUploadResponse(
+            is_valid_bill=True,
+            confidence="high",
+            document_type="utility_bill",
+            error_message=None,
+            warnings=warnings,
+            extracted_data=extracted_data,
+            report=report,
+        )
     except Exception as exc:
         logger.exception("Error processing uploaded bill: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка факторного анализа квитанции: {exc}",
+        # Even if comparison service fails to find history, return extracted data with warning
+        return BillUploadResponse(
+            is_valid_bill=True,
+            confidence="medium",
+            document_type="utility_bill",
+            error_message=f"Ошибка факторного анализа квитанции: {exc}",
+            warnings=warnings + [f"Факторный анализ завершился с ошибкой: {exc}"],
+            extracted_data=extracted_data,
+            report=None,
         )
 
 

@@ -342,3 +342,141 @@ class MonthlyTrendItem extends Equatable {
   @override
   List<Object?> get props => [monthLabel, amount];
 }
+
+/// Распознанная строка услуги из квитанции
+class ExtractedServiceItem extends Equatable {
+  final String serviceCode;
+  final String rawName;
+  final String unit;
+  final double volume;
+  final double tariff;
+  final double total;
+
+  const ExtractedServiceItem({
+    required this.serviceCode,
+    required this.rawName,
+    required this.unit,
+    required this.volume,
+    required this.tariff,
+    required this.total,
+  });
+
+  factory ExtractedServiceItem.fromJson(Map<String, dynamic> json) {
+    return ExtractedServiceItem(
+      serviceCode: json['service_code'] ?? '',
+      rawName: json['raw_name'] ?? '',
+      unit: json['unit'] ?? '',
+      volume: (json['volume'] as num?)?.toDouble() ?? 0.0,
+      tariff: (json['tariff'] as num?)?.toDouble() ?? 0.0,
+      total: (json['total'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  @override
+  List<Object?> get props => [serviceCode, rawName, unit, volume, tariff, total];
+}
+
+/// Извлеченные метаданные и реквизиты квитанции
+class ExtractedBillData extends Equatable {
+  final String billId;
+  final String period;
+  final String address;
+  final String? payer;
+  final String providerName;
+  final String personalAccount;
+  final double totalAmount;
+  final List<ExtractedServiceItem> services;
+  final bool hasQr;
+  final double? qrSumRub;
+
+  const ExtractedBillData({
+    required this.billId,
+    required this.period,
+    required this.address,
+    this.payer,
+    required this.providerName,
+    required this.personalAccount,
+    required this.totalAmount,
+    required this.services,
+    this.hasQr = false,
+    this.qrSumRub,
+  });
+
+  factory ExtractedBillData.fromJson(Map<String, dynamic> json) {
+    final rawServices = json['services'] as List<dynamic>? ?? [];
+    return ExtractedBillData(
+      billId: json['bill_id'] ?? '',
+      period: json['period'] ?? '',
+      address: json['address'] ?? '',
+      payer: json['payer'],
+      providerName: json['provider_name'] ?? 'КГУП «Примводоканал»',
+      personalAccount: json['personal_account'] ?? '',
+      totalAmount: (json['total_amount'] as num?)?.toDouble() ?? 0.0,
+      services: rawServices.map((e) => ExtractedServiceItem.fromJson(e)).toList(),
+      hasQr: json['has_qr'] ?? false,
+      qrSumRub: (json['qr_sum_rub'] as num?)?.toDouble(),
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        billId,
+        period,
+        address,
+        payer,
+        providerName,
+        personalAccount,
+        totalAmount,
+        services,
+        hasQr,
+        qrSumRub,
+      ];
+}
+
+/// Ответ сервера при загрузке и валидации квитанции
+class BillUploadResponse extends Equatable {
+  final bool isValidBill;
+  final String confidence;
+  final String documentType;
+  final String? errorMessage;
+  final List<String> warnings;
+  final ExtractedBillData? extractedData;
+  final ComparisonReport? report;
+
+  const BillUploadResponse({
+    required this.isValidBill,
+    required this.confidence,
+    required this.documentType,
+    this.errorMessage,
+    required this.warnings,
+    this.extractedData,
+    this.report,
+  });
+
+  factory BillUploadResponse.fromJson(Map<String, dynamic> json) {
+    return BillUploadResponse(
+      isValidBill: json['is_valid_bill'] ?? false,
+      confidence: json['confidence'] ?? 'zero',
+      documentType: json['document_type'] ?? 'unknown',
+      errorMessage: json['error_message'],
+      warnings: List<String>.from(json['warnings'] ?? []),
+      extractedData: json['extracted_data'] != null
+          ? ExtractedBillData.fromJson(json['extracted_data'])
+          : null,
+      report: json['report'] != null
+          ? ComparisonReport.fromJson(json['report'])
+          : null,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        isValidBill,
+        confidence,
+        documentType,
+        errorMessage,
+        warnings,
+        extractedData,
+        report,
+      ];
+}

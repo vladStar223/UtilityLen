@@ -318,6 +318,14 @@ class BillAnalysisAgent:
 
         # 3. Image bills (PNG, JPG, JPEG, WEBP)
         if ext in {".png", ".jpg", ".jpeg", ".webp"} or m_type.startswith("image/"):
+            api_key, _, _ = cls._get_api_credentials()
+            if not api_key:
+                raise ValueError(
+                    "Мультимодальное распознавание изображений (Vision OCR) недоступно: "
+                    "на сервере не настроен API-ключ нейросети (GPTUNNEL_API_KEY). "
+                    "Пожалуйста, загрузите квитанцию в формате PDF или JSON, либо укажите API-ключ в .env."
+                )
+
             if m_type.startswith("image/"):
                 img_mime = m_type
             else:
@@ -332,12 +340,12 @@ class BillAnalysisAgent:
             except ValueError:
                 raise
             except Exception as exc:
-                logger.warning(
-                    "Vision LLM agent failed (%s), falling back to safe offline document.",
-                    exc,
+                logger.warning("Vision LLM agent failed (%s)", exc)
+                raise ValueError(
+                    f"Сервис распознавания изображений (Vision LLM) временно недоступен: {exc}. "
+                    "Пожалуйста, повторите попытку позже или загрузите квитанцию в формате PDF."
                 )
 
-            # Fallback to VisionBillParser demo document
-            return VisionBillParser._create_fallback_document()
+            raise ValueError("Не удалось извлечь данные из изображения квитанции через Vision OCR.")
 
         raise ValueError(f"Unsupported file format: {filename}")

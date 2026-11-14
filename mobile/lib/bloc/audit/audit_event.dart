@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../core/models.dart';
 
 abstract class AuditEvent extends Equatable {
   const AuditEvent();
@@ -46,4 +47,12 @@ class ScanQrEvent extends AuditEvent {
 
   @override
   List<Object?> get props => [qrPayload];
+}
+
+class SetAuditReportEvent extends AuditEvent {
+  final ComparisonReport report;
+  const SetAuditReportEvent(this.report);
+
+  @override
+  List<Object?> get props => [report];
 }
