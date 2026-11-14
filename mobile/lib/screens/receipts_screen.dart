@@ -15,17 +15,7 @@ class ReceiptsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<AuditBloc, AuditState>(
       builder: (context, state) {
-        final list = [
-          const ReceiptHistoryItem(
-            id: 'rec_nov_2026',
-            period: 'Ноябрь 2026',
-            totalAmount: 6890.50,
-            providerName: 'Примводоканал · ДЭК',
-            hasOverpayment: true,
-            overpaymentAmount: 245.18,
-          ),
-          ...state.history,
-        ];
+        final list = state.history;
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -169,7 +159,8 @@ class ReceiptsScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (_) => ReceiptViewerScreen(
-                        assetPath: asset,
+                        filePath: item.filePath,
+                        assetPath: item.filePath == null ? asset : null,
                         title: 'Квитанция ${item.period}',
                         amount: item.totalAmount,
                         provider: item.providerName,

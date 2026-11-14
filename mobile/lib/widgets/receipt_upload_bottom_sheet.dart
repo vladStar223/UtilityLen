@@ -69,9 +69,9 @@ class ReceiptUploadBottomSheet extends StatelessWidget {
               title: 'Выбрать из галереи телефона',
               subtitle: 'Фотографии, скриншоты или сканы квитанций',
               onTap: () async {
-                Navigator.pop(context);
                 final picked = await PermissionService.pickReceiptFromGallery(context);
                 if (picked != null && context.mounted) {
+                  Navigator.pop(context);
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -95,9 +95,9 @@ class ReceiptUploadBottomSheet extends StatelessWidget {
               title: 'Сфотографировать квитанцию',
               subtitle: 'Быстрый снимок бумажной квитанции камерой',
               onTap: () async {
-                Navigator.pop(context);
                 final picked = await PermissionService.takeReceiptPhoto(context);
                 if (picked != null && context.mounted) {
+                  Navigator.pop(context);
                   Navigator.push(
                     context,
                     MaterialPageRoute(

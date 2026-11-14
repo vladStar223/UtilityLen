@@ -97,6 +97,7 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
           context,
           response: response,
           onRetake: () => Navigator.pop(context),
+          filePath: widget.filePath,
         );
       }
     } catch (e) {
@@ -314,6 +315,12 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
             ),
           ),
           const SizedBox(height: 14),
+          ElevatedButton.icon(
+            onPressed: () => _applyTemplateAndStartAudit(context),
+            icon: const Icon(Icons.analytics_rounded, size: 20),
+            label: const Text('Провести аудит этой квитанции'),
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -328,7 +335,7 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: ElevatedButton.icon(
+                child: OutlinedButton.icon(
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.camera_alt_rounded, size: 18),
                   label: const Text('Переснять'),
@@ -445,6 +452,187 @@ class _ReceiptViewerScreenState extends State<ReceiptViewerScreen> {
     }
 
     return _buildFallback();
+  }
+
+  void _applyTemplateAndStartAudit(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Выберите тип квитанции для аудита',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Снимок сохранен. Выберите поставщика и начисления для факторного аудита:',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildCaseTile(
+                ctx,
+                title: 'Владивосток: Коэффициент 3.0',
+                subtitle: 'КГУП «Примводоканал» · ул. Амурская, д. 7',
+                amount: '1 437,50 ₽',
+                caseId: 'case_04_vladivostok_coeff3',
+                period: 'Сентябрь 2026',
+                provider: 'КГУП «Примводоканал»',
+                overpayment: 686.56,
+              ),
+              const SizedBox(height: 8),
+              _buildCaseTile(
+                ctx,
+                title: 'Коэффициент 1.5 на ХВС',
+                subtitle: 'ДЭК «Дальэнергосбыт» · просрочка поверки',
+                amount: '6 890,50 ₽',
+                caseId: 'case_02_coeff_15',
+                period: 'Ноябрь 2026',
+                provider: 'ДЭК «Дальэнергосбыт» / ХВС',
+                overpayment: 245.18,
+              ),
+              const SizedBox(height: 8),
+              _buildCaseTile(
+                ctx,
+                title: 'Отопление и базовые ЖКУ',
+                subtitle: 'АО «Дальневосточная РКЦ» · начисления в норме',
+                amount: '5 420,00 ₽',
+                caseId: 'case_01_heating_spike',
+                period: 'Октябрь 2026',
+                provider: 'АО «Дальневосточная РКЦ»',
+                overpayment: 0.0,
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCaseTile(
+    BuildContext sheetContext, {
+    required String title,
+    required String subtitle,
+    required String amount,
+    required String caseId,
+    required String period,
+    required String provider,
+    required double overpayment,
+  }) {
+    final amtNum = double.tryParse(amount.replaceAll(' ', '').replaceAll('₽', '').replaceAll(',', '.')) ?? 0.0;
+    return InkWell(
+      onTap: () {
+        Navigator.pop(sheetContext); // Close sheet
+
+        final newReceipt = ReceiptHistoryItem(
+          id: 'rec_user_${DateTime.now().millisecondsSinceEpoch}',
+          period: period,
+          totalAmount: amtNum,
+          providerName: provider,
+          hasOverpayment: overpayment > 0,
+          overpaymentAmount: overpayment,
+          filePath: widget.filePath,
+        );
+
+        context.read<AuditBloc>().add(
+              AddReceiptToHistoryEvent(
+                item: newReceipt,
+                caseId: caseId,
+              ),
+            );
+
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MainScaffold()),
+          (route) => false,
+        );
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.receipt_long_rounded, color: AppColors.primary, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              amount,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildFallback() {

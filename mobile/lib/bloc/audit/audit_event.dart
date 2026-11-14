@@ -56,3 +56,18 @@ class SetAuditReportEvent extends AuditEvent {
   @override
   List<Object?> get props => [report];
 }
+
+class AddReceiptToHistoryEvent extends AuditEvent {
+  final ReceiptHistoryItem item;
+  final ComparisonReport? report;
+  final String? caseId;
+
+  const AddReceiptToHistoryEvent({
+    required this.item,
+    this.report,
+    this.caseId,
+  });
+
+  @override
+  List<Object?> get props => [item, report, caseId];
+}

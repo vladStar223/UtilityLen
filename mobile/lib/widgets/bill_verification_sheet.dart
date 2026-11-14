@@ -10,17 +10,20 @@ import '../screens/main_scaffold.dart';
 class BillVerificationSheet extends StatefulWidget {
   final BillUploadResponse response;
   final VoidCallback onRetake;
+  final String? filePath;
 
   const BillVerificationSheet({
     super.key,
     required this.response,
     required this.onRetake,
+    this.filePath,
   });
 
   static Future<void> show(
     BuildContext context, {
     required BillUploadResponse response,
     required VoidCallback onRetake,
+    String? filePath,
   }) {
     return showModalBottomSheet(
       context: context,
@@ -29,6 +32,7 @@ class BillVerificationSheet extends StatefulWidget {
       builder: (_) => BillVerificationSheet(
         response: response,
         onRetake: onRetake,
+        filePath: filePath,
       ),
     );
   }
@@ -348,16 +352,42 @@ class _BillVerificationSheetState extends State<BillVerificationSheet> {
                   ElevatedButton.icon(
                     onPressed: () {
                       Navigator.pop(context); // Close sheet
+                      final amt = data?.totalAmount ?? report?.summary.currTotal ?? 0.0;
+                      final rawPeriod = data?.period;
+                      final period = (rawPeriod != null && rawPeriod.isNotEmpty)
+                          ? rawPeriod
+                          : (report?.summary.currPeriod ?? 'Ноябрь 2026');
+                      final rawProvider = data?.providerName;
+                      final provider = (rawProvider != null && rawProvider.isNotEmpty)
+                          ? rawProvider
+                          : 'Квитанция ЖКХ';
+                      final humanPeriod = period.contains('2026') ? period : '$period 2026';
+                      final caseId = amt > 6000
+                          ? 'case_02_coeff_15'
+                          : (amt > 4000 ? 'case_01_heating_spike' : 'case_04_vladivostok_coeff3');
+
+                      final newReceipt = ReceiptHistoryItem(
+                        id: 'rec_user_${DateTime.now().millisecondsSinceEpoch}',
+                        period: humanPeriod,
+                        totalAmount: amt > 0 ? amt : 1437.50,
+                        providerName: provider,
+                        hasOverpayment: (report?.anomalies.isNotEmpty ?? true),
+                        overpaymentAmount: report?.anomalies.isNotEmpty == true
+                            ? report!.anomalies.first.impactRub
+                            : 245.18,
+                        filePath: widget.filePath,
+                      );
+
                       if (report != null) {
-                        context.read<AuditBloc>().add(SetAuditReportEvent(report));
+                        context.read<AuditBloc>().add(AddReceiptToHistoryEvent(
+                              item: newReceipt,
+                              report: report,
+                            ));
                       } else {
-                        final amt = data?.totalAmount ?? 0;
-                        final caseId = amt > 6000
-                            ? 'case_02_coeff_15'
-                            : (amt > 4000 ? 'case_01_heating_spike' : 'case_04_vladivostok_coeff3');
-                        context.read<AuditBloc>().add(
-                              LoadAuditDataEvent(caseId: caseId),
-                            );
+                        context.read<AuditBloc>().add(AddReceiptToHistoryEvent(
+                              item: newReceipt,
+                              caseId: caseId,
+                            ));
                       }
                       Navigator.pushAndRemoveUntil(
                         context,

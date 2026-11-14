@@ -295,6 +295,7 @@ class ReceiptHistoryItem extends Equatable {
   final String providerName; // "Примводоканал + ДЭК"
   final bool hasOverpayment;
   final double overpaymentAmount;
+  final String? filePath;
 
   const ReceiptHistoryItem({
     required this.id,
@@ -303,10 +304,11 @@ class ReceiptHistoryItem extends Equatable {
     required this.providerName,
     this.hasOverpayment = false,
     this.overpaymentAmount = 0.0,
+    this.filePath,
   });
 
   @override
-  List<Object?> get props => [id, period, totalAmount, providerName, hasOverpayment, overpaymentAmount];
+  List<Object?> get props => [id, period, totalAmount, providerName, hasOverpayment, overpaymentAmount, filePath];
 }
 
 /// Модель уведомления / алертов

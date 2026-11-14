@@ -10,6 +10,7 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
   AuditBloc({required this.apiClient}) : super(const AuditState()) {
     on<LoadAuditDataEvent>(_onLoadAuditData);
     on<SetAuditReportEvent>(_onSetAuditReport);
+    on<AddReceiptToHistoryEvent>(_onAddReceiptToHistory);
     on<ChangePeriodEvent>(_onChangePeriod);
     on<FilterCategoryEvent>(_onFilterCategory);
     on<CaptureReceiptPhotoEvent>(_onCaptureReceiptPhoto);
@@ -21,6 +22,35 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
     Emitter<AuditState> emit,
   ) {
     emit(_buildLoadedState(event.report));
+  }
+
+  Future<void> _onAddReceiptToHistory(
+    AddReceiptToHistoryEvent event,
+    Emitter<AuditState> emit,
+  ) async {
+    final updatedHistory = [event.item, ...state.history.where((h) => h.id != event.item.id)];
+
+    if (event.report != null) {
+      final loadedState = _buildLoadedState(event.report!);
+      emit(loadedState.copyWith(
+        history: updatedHistory,
+        selectedPeriod: event.item.period,
+      ));
+    } else if (event.caseId != null) {
+      emit(state.copyWith(status: AuditStatus.loading, history: updatedHistory));
+      try {
+        final report = await apiClient.compareBills(caseId: event.caseId!);
+        final loadedState = _buildLoadedState(report);
+        emit(loadedState.copyWith(
+          history: updatedHistory,
+          selectedPeriod: event.item.period,
+        ));
+      } catch (_) {
+        emit(state.copyWith(status: AuditStatus.loaded, history: updatedHistory));
+      }
+    } else {
+      emit(state.copyWith(history: updatedHistory));
+    }
   }
 
   static String _periodToHuman(String period) {
@@ -42,7 +72,7 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
   }
 
   AuditState _buildLoadedState(ComparisonReport report) {
-    const history = [
+    const defaultHistory = [
       ReceiptHistoryItem(
         id: 'rec_2026_11',
         period: 'Ноябрь 2026',
@@ -74,6 +104,9 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
         hasOverpayment: false,
       ),
     ];
+
+    final customReceipts = state.history.where((item) => !item.id.startsWith('rec_2026_')).toList();
+    final effectiveHistory = [...customReceipts, ...defaultHistory];
 
     final currAmount = report.summary.currTotal;
     final prevAmount = report.summary.prevTotal;
@@ -132,7 +165,7 @@ class AuditBloc extends Bloc<AuditEvent, AuditState> {
     return state.copyWith(
       status: AuditStatus.loaded,
       report: report,
-      history: history,
+      history: effectiveHistory,
       monthlyTrends: trends,
       alerts: alerts,
       selectedPeriod: humanPeriod,
